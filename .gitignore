@@ -1,0 +1,17 @@
+# Never commit secrets
+.env
+
+# Node
+node_modules/
+package-lock.json
+
+# Hardhat
+cache/
+artifacts/
+
+# MacOS junk
+.DS_Store
+
+# Logs
+*.log
+
