@@ -1,17 +1,15 @@
-# Never commit secrets
+# Secrets
 .env
 
 # Node
 node_modules/
 package-lock.json
 
-# Hardhat
-cache/
+# Hardhat build
 artifacts/
+cache/
 
-# MacOS junk
+# OS / misc
 .DS_Store
-
-# Logs
 *.log
 
