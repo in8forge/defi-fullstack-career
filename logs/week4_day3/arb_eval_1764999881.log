@@ -1,0 +1,14 @@
+
+[dotenv@17.2.3] injecting env (5) from .env -- tip: ⚙️  enable debug logging with { debug: true }
+Arbitrage evaluation cycle...
+Connected to mainnet. Latest block: 23951842
+Arb evaluation result:
+{
+  "inputUSDC": 1000,
+  "outputWETH": 0.32829,
+  "grossUSDC": 984.8700000000001,
+  "flashLoanFeeUSDC": 0.5,
+  "gasCostUSDC": 30,
+  "netPnLUSDC": -45.62999999999988,
+  "profitable": false
+}

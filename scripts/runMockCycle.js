@@ -27,8 +27,22 @@ async function main() {
 
   const amount = ethers.parseUnits("100", 6); // 100 mUSDC
 
-  console.log("Running testMockCycle with 100 mUSDC...");
-  const tx = await executor.testMockCycle(mockUsdcAddress, amount);
+  const abiCoder = ethers.AbiCoder.defaultAbiCoder();
+
+  const router = ethers.ZeroAddress; // unused for now on Sepolia
+  const tokenIn = mockUsdcAddress;
+  const tokenOut = mockUsdcAddress;
+  const minOutBps = 10000n; // 100.00%
+
+  const params = abiCoder.encode(
+    ["address", "address", "address", "uint256"],
+    [router, tokenIn, tokenOut, minOutBps]
+  );
+
+  console.log("Encoded params:", params);
+
+  console.log("Running testMockCycle(100 mUSDC, encoded params)...");
+  const tx = await executor.testMockCycle(mockUsdcAddress, amount, params);
   console.log("testMockCycle tx sent:", tx.hash);
 
   const receipt = await tx.wait();

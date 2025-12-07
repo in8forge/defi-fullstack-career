@@ -1,0 +1,42 @@
+
+[dotenv@17.2.3] injecting env (5) from .env -- tip: ⚙️  load multiple .env files with { path: ['.env.local', '.env'] }
+Arbitrage evaluation cycle...
+Connected to mainnet. Latest block: 23951843
+Arb evaluation result:
+{
+  "inputUSDC": 1000,
+  "outputWETH": 0.32829,
+  "grossUSDC": 984.8700000000001,
+  "flashLoanFeeUSDC": 0.5,
+  "gasCostUSDC": 30,
+  "netPnLUSDC": -45.62999999999988,
+  "profitable": false
+}
+
+[dotenv@17.2.3] injecting env (5) from .env -- tip: 🔐 prevent committing .env to code: https://dotenvx.com/precommit
+Arbitrage evaluation cycle...
+Connected to mainnet. Latest block: 23951843
+Arb evaluation result:
+{
+  "inputUSDC": 1000,
+  "outputWETH": 0.32829,
+  "grossUSDC": 984.8700000000001,
+  "flashLoanFeeUSDC": 0.5,
+  "gasCostUSDC": 30,
+  "netPnLUSDC": -45.62999999999988,
+  "profitable": false
+}
+
+[dotenv@17.2.3] injecting env (5) from .env -- tip: ⚙️  override existing env vars with { override: true }
+Arbitrage evaluation cycle...
+Connected to mainnet. Latest block: 23951843
+Arb evaluation result:
+{
+  "inputUSDC": 1000,
+  "outputWETH": 0.32829,
+  "grossUSDC": 984.8700000000001,
+  "flashLoanFeeUSDC": 0.5,
+  "gasCostUSDC": 30,
+  "netPnLUSDC": -45.62999999999988,
+  "profitable": false
+}

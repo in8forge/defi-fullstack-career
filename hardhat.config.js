@@ -1,21 +1,12 @@
-require("@nomicfoundation/hardhat-ethers");
-require("dotenv").config();
+import "@nomicfoundation/hardhat-toolbox";
 
-const { SEPOLIA_RPC, PRIVATE_KEY, ALCHEMY_MAINNET_RPC } = process.env;
-
-/** @type import("hardhat/config").HardhatUserConfig */
-module.exports = {
+export default {
   solidity: "0.8.20",
   networks: {
-    sepolia: {
-      url: SEPOLIA_RPC || "",
-      accounts: PRIVATE_KEY ? [PRIVATE_KEY] : [],
-      chainId: 11155111,
-    },
-    fork: {
-      url: ALCHEMY_MAINNET_RPC || "",
-      accounts: PRIVATE_KEY ? [PRIVATE_KEY] : [],
-      chainId: 1,
-    },
-  },
+    hardhat: {
+      forking: {
+        url: "https://eth-mainnet.g.alchemy.com/v2/a1rJ2_Zb1QZnP9x67KW5l"
+      }
+    }
+  }
 };

@@ -17,30 +17,44 @@ async function main() {
   const provider = new ethers.JsonRpcProvider(rpcUrl);
   const wallet = new ethers.Wallet(privateKey, provider);
 
-  console.log("Approver wallet:", wallet.address);
-  console.log("Executor address:", executorAddress);
-  console.log("MockUSDC token:", mockUsdcAddress);
+  console.log("Approver (wallet):", wallet.address);
+  console.log("Executor:", executorAddress);
+  console.log("MockUSDC:", mockUsdcAddress);
 
   const erc20Abi = [
     "function decimals() view returns (uint8)",
-    "function approve(address,uint256) returns (bool)"
+    "function symbol() view returns (string)",
+    "function allowance(address owner, address spender) view returns (uint256)",
+    "function approve(address spender, uint256 amount) returns (bool)",
   ];
 
   const token = new ethers.Contract(mockUsdcAddress, erc20Abi, wallet);
-  const decimals = await token.decimals();
 
-  const amountHuman = "1000"; // approve 1,000 mUSDC
-  const amount = ethers.parseUnits(amountHuman, decimals);
+  const [decimals, symbol] = await Promise.all([
+    token.decimals(),
+    token.symbol(),
+  ]);
 
-  console.log("Approving", amountHuman, "mUSDC for executor to spend...");
-  const tx = await token.approve(executorAddress, amount);
-  console.log("Approve tx sent:", tx.hash);
+  const currentAllowance = await token.allowance(wallet.address, executorAddress);
+
+  console.log("Token symbol:", symbol, "decimals:", decimals.toString());
+  console.log("Current allowance (raw):", currentAllowance.toString());
+
+  // Approve 1,000,000 mUSDC (more than enough for tests)
+  const amountToApprove = ethers.parseUnits("1000000", decimals);
+  console.log("New allowance target (raw):", amountToApprove.toString());
+
+  const tx = await token.approve(executorAddress, amountToApprove);
+  console.log("Approve tx hash:", tx.hash);
 
   const receipt = await tx.wait();
-  console.log("Approve confirmed in block:", receipt.blockNumber);
+  console.log("Approve tx mined in block:", receipt.blockNumber);
+
+  const newAllowance = await token.allowance(wallet.address, executorAddress);
+  console.log("Updated allowance (raw):", newAllowance.toString());
 }
 
-main().catch((error) => {
-  console.error(error);
+main().catch((err) => {
+  console.error(err);
   process.exitCode = 1;
 });

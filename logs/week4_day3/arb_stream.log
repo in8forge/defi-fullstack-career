@@ -1,0 +1,462 @@
+
+[dotenv@17.2.3] injecting env (5) from .env -- tip: ⚙️  specify custom .env file path with { path: '/custom/path/.env' }
+Arbitrage evaluation cycle...
+Connected to mainnet. Latest block: 23951844
+Arb evaluation result:
+{
+  "inputUSDC": 1000,
+  "outputWETH": 0.32829,
+  "grossUSDC": 984.8700000000001,
+  "flashLoanFeeUSDC": 0.5,
+  "gasCostUSDC": 30,
+  "netPnLUSDC": -45.62999999999988,
+  "profitable": false
+}
+
+[dotenv@17.2.3] injecting env (5) from .env -- tip: ⚙️  specify custom .env file path with { path: '/custom/path/.env' }
+Arbitrage evaluation cycle...
+Connected to mainnet. Latest block: 23951845
+Arb evaluation result:
+{
+  "inputUSDC": 1000,
+  "outputWETH": 0.32829,
+  "grossUSDC": 984.8700000000001,
+  "flashLoanFeeUSDC": 0.5,
+  "gasCostUSDC": 30,
+  "netPnLUSDC": -45.62999999999988,
+  "profitable": false
+}
+
+[dotenv@17.2.3] injecting env (5) from .env -- tip: 🔄 add secrets lifecycle management: https://dotenvx.com/ops
+Arbitrage evaluation cycle...
+Connected to mainnet. Latest block: 23951846
+Arb evaluation result:
+{
+  "inputUSDC": 1000,
+  "outputWETH": 0.32829,
+  "grossUSDC": 984.8700000000001,
+  "flashLoanFeeUSDC": 0.5,
+  "gasCostUSDC": 30,
+  "netPnLUSDC": -45.62999999999988,
+  "profitable": false
+}
+
+[dotenv@17.2.3] injecting env (5) from .env -- tip: 🗂️ backup and recover secrets: https://dotenvx.com/ops
+Arbitrage evaluation cycle...
+Connected to mainnet. Latest block: 23951847
+Arb evaluation result:
+{
+  "inputUSDC": 1000,
+  "outputWETH": 0.32829,
+  "grossUSDC": 984.8700000000001,
+  "flashLoanFeeUSDC": 0.5,
+  "gasCostUSDC": 30,
+  "netPnLUSDC": -45.62999999999988,
+  "profitable": false
+}
+
+[dotenv@17.2.3] injecting env (5) from .env -- tip: ⚙️  specify custom .env file path with { path: '/custom/path/.env' }
+Arbitrage evaluation cycle...
+Connected to mainnet. Latest block: 23951848
+Arb evaluation result:
+{
+  "inputUSDC": 1000,
+  "outputWETH": 0.32829,
+  "grossUSDC": 984.8700000000001,
+  "flashLoanFeeUSDC": 0.5,
+  "gasCostUSDC": 30,
+  "netPnLUSDC": -45.62999999999988,
+  "profitable": false
+}
+
+[dotenv@17.2.3] injecting env (5) from .env -- tip: 🔐 encrypt with Dotenvx: https://dotenvx.com
+Arbitrage evaluation cycle...
+Connected to mainnet. Latest block: 23951849
+Arb evaluation result:
+{
+  "inputUSDC": 1000,
+  "outputWETH": 0.32829,
+  "grossUSDC": 984.8700000000001,
+  "flashLoanFeeUSDC": 0.5,
+  "gasCostUSDC": 30,
+  "netPnLUSDC": -45.62999999999988,
+  "profitable": false
+}
+
+[dotenv@17.2.3] injecting env (5) from .env -- tip: 🔄 add secrets lifecycle management: https://dotenvx.com/ops
+Arbitrage evaluation cycle...
+Connected to mainnet. Latest block: 23951850
+Arb evaluation result:
+{
+  "inputUSDC": 1000,
+  "outputWETH": 0.32829,
+  "grossUSDC": 984.8700000000001,
+  "flashLoanFeeUSDC": 0.5,
+  "gasCostUSDC": 30,
+  "netPnLUSDC": -45.62999999999988,
+  "profitable": false
+}
+
+[dotenv@17.2.3] injecting env (5) from .env -- tip: ⚙️  enable debug logging with { debug: true }
+Arbitrage evaluation cycle...
+Connected to mainnet. Latest block: 23951851
+Arb evaluation result:
+{
+  "inputUSDC": 1000,
+  "outputWETH": 0.32829,
+  "grossUSDC": 984.8700000000001,
+  "flashLoanFeeUSDC": 0.5,
+  "gasCostUSDC": 30,
+  "netPnLUSDC": -45.62999999999988,
+  "profitable": false
+}
+
+[dotenv@17.2.3] injecting env (5) from .env -- tip: ⚙️  enable debug logging with { debug: true }
+Arbitrage evaluation cycle...
+Connected to mainnet. Latest block: 23951852
+Arb evaluation result:
+{
+  "inputUSDC": 1000,
+  "outputWETH": 0.32829,
+  "grossUSDC": 984.8700000000001,
+  "flashLoanFeeUSDC": 0.5,
+  "gasCostUSDC": 30,
+  "netPnLUSDC": -45.62999999999988,
+  "profitable": false
+}
+
+[dotenv@17.2.3] injecting env (5) from .env -- tip: 📡 add observability to secrets: https://dotenvx.com/ops
+Arbitrage evaluation cycle...
+Connected to mainnet. Latest block: 23951853
+Arb evaluation result:
+{
+  "inputUSDC": 1000,
+  "outputWETH": 0.32829,
+  "grossUSDC": 984.8700000000001,
+  "flashLoanFeeUSDC": 0.5,
+  "gasCostUSDC": 30,
+  "netPnLUSDC": -45.62999999999988,
+  "profitable": false
+}
+
+[dotenv@17.2.3] injecting env (5) from .env -- tip: ⚙️  specify custom .env file path with { path: '/custom/path/.env' }
+Arbitrage evaluation cycle...
+Connected to mainnet. Latest block: 23951854
+Arb evaluation result:
+{
+  "inputUSDC": 1000,
+  "outputWETH": 0.32829,
+  "grossUSDC": 984.8700000000001,
+  "flashLoanFeeUSDC": 0.5,
+  "gasCostUSDC": 30,
+  "netPnLUSDC": -45.62999999999988,
+  "profitable": false
+}
+
+[dotenv@17.2.3] injecting env (5) from .env -- tip: 🔐 encrypt with Dotenvx: https://dotenvx.com
+Arbitrage evaluation cycle...
+Connected to mainnet. Latest block: 23951855
+Arb evaluation result:
+{
+  "inputUSDC": 1000,
+  "outputWETH": 0.32829,
+  "grossUSDC": 984.8700000000001,
+  "flashLoanFeeUSDC": 0.5,
+  "gasCostUSDC": 30,
+  "netPnLUSDC": -45.62999999999988,
+  "profitable": false
+}
+
+[dotenv@17.2.3] injecting env (5) from .env -- tip: 👥 sync secrets across teammates & machines: https://dotenvx.com/ops
+Arbitrage evaluation cycle...
+Connected to mainnet. Latest block: 23951857
+Arb evaluation result:
+{
+  "inputUSDC": 1000,
+  "outputWETH": 0.32829,
+  "grossUSDC": 984.8700000000001,
+  "flashLoanFeeUSDC": 0.5,
+  "gasCostUSDC": 30,
+  "netPnLUSDC": -45.62999999999988,
+  "profitable": false
+}
+
+[dotenv@17.2.3] injecting env (5) from .env -- tip: 🔐 prevent building .env in docker: https://dotenvx.com/prebuild
+Arbitrage evaluation cycle...
+Connected to mainnet. Latest block: 23951858
+Arb evaluation result:
+{
+  "inputUSDC": 1000,
+  "outputWETH": 0.32829,
+  "grossUSDC": 984.8700000000001,
+  "flashLoanFeeUSDC": 0.5,
+  "gasCostUSDC": 30,
+  "netPnLUSDC": -45.62999999999988,
+  "profitable": false
+}
+
+[dotenv@17.2.3] injecting env (5) from .env -- tip: ⚙️  specify custom .env file path with { path: '/custom/path/.env' }
+Arbitrage evaluation cycle...
+Connected to mainnet. Latest block: 23951859
+Arb evaluation result:
+{
+  "inputUSDC": 1000,
+  "outputWETH": 0.32829,
+  "grossUSDC": 984.8700000000001,
+  "flashLoanFeeUSDC": 0.5,
+  "gasCostUSDC": 30,
+  "netPnLUSDC": -45.62999999999988,
+  "profitable": false
+}
+
+[dotenv@17.2.3] injecting env (5) from .env -- tip: 🔐 prevent committing .env to code: https://dotenvx.com/precommit
+Arbitrage evaluation cycle...
+Connected to mainnet. Latest block: 23951860
+Arb evaluation result:
+{
+  "inputUSDC": 1000,
+  "outputWETH": 0.32829,
+  "grossUSDC": 984.8700000000001,
+  "flashLoanFeeUSDC": 0.5,
+  "gasCostUSDC": 30,
+  "netPnLUSDC": -45.62999999999988,
+  "profitable": false
+}
+
+[dotenv@17.2.3] injecting env (5) from .env -- tip: 🔄 add secrets lifecycle management: https://dotenvx.com/ops
+Arbitrage evaluation cycle...
+Connected to mainnet. Latest block: 23951861
+Arb evaluation result:
+{
+  "inputUSDC": 1000,
+  "outputWETH": 0.32829,
+  "grossUSDC": 984.8700000000001,
+  "flashLoanFeeUSDC": 0.5,
+  "gasCostUSDC": 30,
+  "netPnLUSDC": -45.62999999999988,
+  "profitable": false
+}
+
+[dotenv@17.2.3] injecting env (5) from .env -- tip: 👥 sync secrets across teammates & machines: https://dotenvx.com/ops
+Arbitrage evaluation cycle...
+Connected to mainnet. Latest block: 23951862
+Arb evaluation result:
+{
+  "inputUSDC": 1000,
+  "outputWETH": 0.32829,
+  "grossUSDC": 984.8700000000001,
+  "flashLoanFeeUSDC": 0.5,
+  "gasCostUSDC": 30,
+  "netPnLUSDC": -45.62999999999988,
+  "profitable": false
+}
+
+[dotenv@17.2.3] injecting env (5) from .env -- tip: 🗂️ backup and recover secrets: https://dotenvx.com/ops
+Arbitrage evaluation cycle...
+Connected to mainnet. Latest block: 23951863
+Arb evaluation result:
+{
+  "inputUSDC": 1000,
+  "outputWETH": 0.32829,
+  "grossUSDC": 984.8700000000001,
+  "flashLoanFeeUSDC": 0.5,
+  "gasCostUSDC": 30,
+  "netPnLUSDC": -45.62999999999988,
+  "profitable": false
+}
+
+[dotenv@17.2.3] injecting env (5) from .env -- tip: 🔐 prevent building .env in docker: https://dotenvx.com/prebuild
+Arbitrage evaluation cycle...
+Connected to mainnet. Latest block: 23951864
+Arb evaluation result:
+{
+  "inputUSDC": 1000,
+  "outputWETH": 0.32829,
+  "grossUSDC": 984.8700000000001,
+  "flashLoanFeeUSDC": 0.5,
+  "gasCostUSDC": 30,
+  "netPnLUSDC": -45.62999999999988,
+  "profitable": false
+}
+
+[dotenv@17.2.3] injecting env (5) from .env -- tip: ⚙️  specify custom .env file path with { path: '/custom/path/.env' }
+Arbitrage evaluation cycle...
+Connected to mainnet. Latest block: 23951865
+Arb evaluation result:
+{
+  "inputUSDC": 1000,
+  "outputWETH": 0.32829,
+  "grossUSDC": 984.8700000000001,
+  "flashLoanFeeUSDC": 0.5,
+  "gasCostUSDC": 30,
+  "netPnLUSDC": -45.62999999999988,
+  "profitable": false
+}
+
+[dotenv@17.2.3] injecting env (5) from .env -- tip: ✅ audit secrets and track compliance: https://dotenvx.com/ops
+Arbitrage evaluation cycle...
+Connected to mainnet. Latest block: 23951866
+Arb evaluation result:
+{
+  "inputUSDC": 1000,
+  "outputWETH": 0.32829,
+  "grossUSDC": 984.8700000000001,
+  "flashLoanFeeUSDC": 0.5,
+  "gasCostUSDC": 30,
+  "netPnLUSDC": -45.62999999999988,
+  "profitable": false
+}
+
+[dotenv@17.2.3] injecting env (5) from .env -- tip: ⚙️  write to custom object with { processEnv: myObject }
+Arbitrage evaluation cycle...
+Connected to mainnet. Latest block: 23951867
+Arb evaluation result:
+{
+  "inputUSDC": 1000,
+  "outputWETH": 0.32829,
+  "grossUSDC": 984.8700000000001,
+  "flashLoanFeeUSDC": 0.5,
+  "gasCostUSDC": 30,
+  "netPnLUSDC": -45.62999999999988,
+  "profitable": false
+}
+
+[dotenv@17.2.3] injecting env (5) from .env -- tip: 🗂️ backup and recover secrets: https://dotenvx.com/ops
+Arbitrage evaluation cycle...
+Connected to mainnet. Latest block: 23951868
+Arb evaluation result:
+{
+  "inputUSDC": 1000,
+  "outputWETH": 0.32829,
+  "grossUSDC": 984.8700000000001,
+  "flashLoanFeeUSDC": 0.5,
+  "gasCostUSDC": 30,
+  "netPnLUSDC": -45.62999999999988,
+  "profitable": false
+}
+
+[dotenv@17.2.3] injecting env (5) from .env -- tip: 🔑 add access controls to secrets: https://dotenvx.com/ops
+Arbitrage evaluation cycle...
+Connected to mainnet. Latest block: 23951869
+Arb evaluation result:
+{
+  "inputUSDC": 1000,
+  "outputWETH": 0.32829,
+  "grossUSDC": 984.8700000000001,
+  "flashLoanFeeUSDC": 0.5,
+  "gasCostUSDC": 30,
+  "netPnLUSDC": -45.62999999999988,
+  "profitable": false
+}
+
+[dotenv@17.2.3] injecting env (5) from .env -- tip: ⚙️  write to custom object with { processEnv: myObject }
+Arbitrage evaluation cycle...
+Connected to mainnet. Latest block: 23951870
+Arb evaluation result:
+{
+  "inputUSDC": 1000,
+  "outputWETH": 0.32829,
+  "grossUSDC": 984.8700000000001,
+  "flashLoanFeeUSDC": 0.5,
+  "gasCostUSDC": 30,
+  "netPnLUSDC": -45.62999999999988,
+  "profitable": false
+}
+
+[dotenv@17.2.3] injecting env (5) from .env -- tip: ⚙️  load multiple .env files with { path: ['.env.local', '.env'] }
+Arbitrage evaluation cycle...
+Connected to mainnet. Latest block: 23951871
+Arb evaluation result:
+{
+  "inputUSDC": 1000,
+  "outputWETH": 0.32829,
+  "grossUSDC": 984.8700000000001,
+  "flashLoanFeeUSDC": 0.5,
+  "gasCostUSDC": 30,
+  "netPnLUSDC": -45.62999999999988,
+  "profitable": false
+}
+
+[dotenv@17.2.3] injecting env (5) from .env -- tip: ✅ audit secrets and track compliance: https://dotenvx.com/ops
+Arbitrage evaluation cycle...
+Connected to mainnet. Latest block: 23951872
+Arb evaluation result:
+{
+  "inputUSDC": 1000,
+  "outputWETH": 0.32829,
+  "grossUSDC": 984.8700000000001,
+  "flashLoanFeeUSDC": 0.5,
+  "gasCostUSDC": 30,
+  "netPnLUSDC": -45.62999999999988,
+  "profitable": false
+}
+
+[dotenv@17.2.3] injecting env (5) from .env -- tip: 📡 add observability to secrets: https://dotenvx.com/ops
+Arbitrage evaluation cycle...
+Connected to mainnet. Latest block: 23951873
+Arb evaluation result:
+{
+  "inputUSDC": 1000,
+  "outputWETH": 0.32829,
+  "grossUSDC": 984.8700000000001,
+  "flashLoanFeeUSDC": 0.5,
+  "gasCostUSDC": 30,
+  "netPnLUSDC": -45.62999999999988,
+  "profitable": false
+}
+
+[dotenv@17.2.3] injecting env (5) from .env -- tip: 📡 add observability to secrets: https://dotenvx.com/ops
+Arbitrage evaluation cycle...
+Connected to mainnet. Latest block: 23951874
+Arb evaluation result:
+{
+  "inputUSDC": 1000,
+  "outputWETH": 0.32829,
+  "grossUSDC": 984.8700000000001,
+  "flashLoanFeeUSDC": 0.5,
+  "gasCostUSDC": 30,
+  "netPnLUSDC": -45.62999999999988,
+  "profitable": false
+}
+
+[dotenv@17.2.3] injecting env (5) from .env -- tip: 🔐 encrypt with Dotenvx: https://dotenvx.com
+Arbitrage evaluation cycle...
+Connected to mainnet. Latest block: 23951875
+Arb evaluation result:
+{
+  "inputUSDC": 1000,
+  "outputWETH": 0.32829,
+  "grossUSDC": 984.8700000000001,
+  "flashLoanFeeUSDC": 0.5,
+  "gasCostUSDC": 30,
+  "netPnLUSDC": -45.62999999999988,
+  "profitable": false
+}
+
+[dotenv@17.2.3] injecting env (5) from .env -- tip: ⚙️  write to custom object with { processEnv: myObject }
+Arbitrage evaluation cycle...
+Connected to mainnet. Latest block: 23951876
+Arb evaluation result:
+{
+  "inputUSDC": 1000,
+  "outputWETH": 0.32829,
+  "grossUSDC": 984.8700000000001,
+  "flashLoanFeeUSDC": 0.5,
+  "gasCostUSDC": 30,
+  "netPnLUSDC": -45.62999999999988,
+  "profitable": false
+}
+
+[dotenv@17.2.3] injecting env (5) from .env -- tip: ⚙️  override existing env vars with { override: true }
+Arbitrage evaluation cycle...
+Connected to mainnet. Latest block: 23951877
+Arb evaluation result:
+{
+  "inputUSDC": 1000,
+  "outputWETH": 0.32829,
+  "grossUSDC": 984.8700000000001,
+  "flashLoanFeeUSDC": 0.5,
+  "gasCostUSDC": 30,
+  "netPnLUSDC": -45.62999999999988,
+  "profitable": false
+}
