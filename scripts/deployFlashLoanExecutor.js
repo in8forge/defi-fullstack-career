@@ -1,49 +1,38 @@
-import hre from "hardhat";
-import { ethers } from "ethers";
-import { config as dotenvConfig } from "dotenv";
-import { networkConfig } from "../aaveConfig.js";
+import { JsonRpcProvider, ContractFactory, Wallet } from "ethers";
+import { readFileSync } from "fs";
 
-dotenvConfig();
+const AAVE_POOL_PROVIDER = "0x2f39d218133AFaB8F2B819B1066c7E434Ad94E9e";
 
 async function main() {
-  const chainId = 11155111;
-  const config = networkConfig[chainId];
-  if (config === undefined) {
-    throw new Error("No Aave config for chainId " + String(chainId));
-  }
-
-  const providerAddress = config.poolAddressesProvider;
-
-  const rpcUrl = process.env.SEPOLIA_RPC;
-  const privateKey = process.env.PRIVATE_KEY;
-
-  if (!rpcUrl) {
-    throw new Error("SEPOLIA_RPC is not set in .env");
-  }
-  if (!privateKey) {
-    throw new Error("PRIVATE_KEY is not set in .env");
-  }
-
-  const provider = new ethers.JsonRpcProvider(rpcUrl);
-  const wallet = new ethers.Wallet(privateKey, provider);
+  const provider = new JsonRpcProvider("http://127.0.0.1:8545");
+  
+  // Use Hardhat's default account #0 (has 10000 ETH)
+  const privateKey = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
+  const wallet = new Wallet(privateKey, provider);
 
   console.log("Deploying from:", wallet.address);
-  console.log("Using PoolAddressesProvider:", providerAddress);
+  
+  const balance = await provider.getBalance(wallet.address);
+  console.log("Balance:", balance.toString(), "wei");
 
-  const artifact = await hre.artifacts.readArtifact("FlashLoanExecutor");
-  const factory = new ethers.ContractFactory(artifact.abi, artifact.bytecode, wallet);
+  const artifact = JSON.parse(
+    readFileSync("./artifacts/contracts/FlashLoanExecutor.sol/FlashLoanExecutor.json", "utf8")
+  );
 
-  const executor = await factory.deploy(providerAddress);
-  console.log("Deployment tx:", executor.deployTransaction?.hash ?? "(pending)");
-
-  await executor.deploymentTransaction()?.wait();
+  const factory = new ContractFactory(artifact.abi, artifact.bytecode, wallet);
+  
+  console.log("Deploying FlashLoanExecutor...");
+  const executor = await factory.deploy(AAVE_POOL_PROVIDER);
+  
+  await executor.waitForDeployment();
+  
   const address = await executor.getAddress();
-
-  console.log("FlashLoanExecutor deployed to:", address);
-  console.log("Set this value in .env as FLASH_EXECUTOR_ADDRESS");
+  console.log("\n✅ FlashLoanExecutor deployed to:", address);
+  console.log("Owner:", await executor.owner());
+  console.log("Max flash amount:", (await executor.maxFlashAmount()).toString());
+  
+  console.log("\n📝 Update your scripts to use this address:");
+  console.log(`const FLASH_LOAN_EXECUTOR = "${address}";`);
 }
 
-main().catch((error) => {
-  console.error(error);
-  process.exitCode = 1;
-});
+main().catch(console.error);

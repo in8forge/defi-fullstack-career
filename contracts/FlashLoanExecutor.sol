@@ -5,28 +5,26 @@ import {FlashLoanSimpleReceiverBase} from "@aave/core-v3/contracts/flashloan/bas
 import {IPoolAddressesProvider} from "@aave/core-v3/contracts/interfaces/IPoolAddressesProvider.sol";
 import {IERC20} from "@aave/core-v3/contracts/dependencies/openzeppelin/contracts/IERC20.sol";
 
-/**
- * @title FlashLoanExecutor
- * @notice Aave V3 flash-loan executor with a parametric strategy hook.
- *
- * params encoding (non-empty):
- *   abi.encode(address router, address tokenIn, address tokenOut, uint256 minOutBps)
- */
+interface IUniswapV2Router {
+    function swapExactTokensForTokens(
+        uint amountIn,
+        uint amountOutMin,
+        address[] calldata path,
+        address to,
+        uint deadline
+    ) external returns (uint[] memory amounts);
+}
+
 contract FlashLoanExecutor is FlashLoanSimpleReceiverBase {
     address public owner;
     uint256 public maxFlashAmount;
 
-    event FlashLoanRequested(address indexed asset, uint256 amount, bytes params);
-    event FlashLoanExecuted(address indexed asset, uint256 amount, uint256 premium, int256 pnl, bytes params);
-    event MockCycleStarted(address indexed asset, uint256 amount, bytes params);
-    event MockCycleCompleted(address indexed asset, uint256 amount, int256 pnl, bytes params);
-    event StrategyExecuted(address indexed asset, uint256 amount, int256 pnl, bytes params);
+    event FlashLoanExecuted(address indexed asset, uint256 amount, uint256 premium, int256 netPnl);
+    event ArbitrageExecuted(uint256 amountIn, uint256 amountOut);
 
-    constructor(address provider)
-        FlashLoanSimpleReceiverBase(IPoolAddressesProvider(provider))
-    {
+    constructor(address provider) FlashLoanSimpleReceiverBase(IPoolAddressesProvider(provider)) {
         owner = msg.sender;
-        maxFlashAmount = 1_000_000e6; // default cap for 6-decimal assets
+        maxFlashAmount = 1_000_000e6;
     }
 
     modifier onlyOwner() {
@@ -38,127 +36,82 @@ contract FlashLoanExecutor is FlashLoanSimpleReceiverBase {
         maxFlashAmount = newMax;
     }
 
-    // ========= AAVE FLASH-LOAN PATH =========
-
     function executeOperation(
         address asset,
         uint256 amount,
         uint256 premium,
-        address initiator,
+        address,
         bytes calldata params
     ) external override returns (bool) {
-        initiator; // unused
+        require(msg.sender == address(POOL), "Caller not Pool");
+        require(amount <= maxFlashAmount, "Amount exceeds max");
 
-        require(amount > 0, "amount=0");
-        require(amount <= maxFlashAmount, "amount>maxFlashAmount");
+        (address r1, address r2, address[] memory p1, address[] memory p2) = 
+            abi.decode(params, (address, address, address[], address[]));
 
-        uint256 beforeBal = IERC20(asset).balanceOf(address(this));
+        uint256 finalAmount = _executeArbitrage(asset, amount, r1, r2, p1, p2);
 
-        int256 pnl = _strategy(asset, amount, params);
+        uint256 owed = amount + premium;
+        require(IERC20(asset).balanceOf(address(this)) >= owed, "Insufficient balance");
 
-        uint256 totalOwed = amount + premium;
-        uint256 afterBal = IERC20(asset).balanceOf(address(this));
-        require(afterBal >= totalOwed, "insufficient funds to repay");
+        IERC20(asset).approve(address(POOL), owed);
 
-        IERC20(asset).approve(address(POOL), totalOwed);
+        emit FlashLoanExecuted(asset, amount, premium, int256(finalAmount) - int256(amount));
+        emit ArbitrageExecuted(amount, finalAmount);
 
-        emit FlashLoanExecuted(asset, amount, premium, pnl, params);
         return true;
     }
 
     function requestFlashLoan(
         address asset,
         uint256 amount,
-        bytes calldata params
+        address router1,
+        address router2,
+        address[] calldata path1,
+        address[] calldata path2
     ) external onlyOwner {
-        require(amount > 0, "amount=0");
-        require(amount <= maxFlashAmount, "amount>maxFlashAmount");
+        require(amount <= maxFlashAmount, "Amount exceeds max");
+        require(path1[0] == asset && path2[path2.length - 1] == asset, "Invalid paths");
 
-        emit FlashLoanRequested(asset, amount, params);
+        bytes memory params = abi.encode(router1, router2, path1, path2);
+        POOL.flashLoanSimple(address(this), asset, amount, params, 0);
+    }
 
-        POOL.flashLoanSimple(
-            address(this),
-            asset,
+    function _executeArbitrage(
+        address asset,
+        uint256 amount,
+        address r1,
+        address r2,
+        address[] memory p1,
+        address[] memory p2
+    ) internal returns (uint256) {
+        IERC20(asset).approve(r1, amount);
+
+        uint[] memory a1 = IUniswapV2Router(r1).swapExactTokensForTokens(
             amount,
-            params,
-            0
+            0,
+            p1,
+            address(this),
+            block.timestamp + 300
         );
+
+        uint256 intermediate = a1[a1.length - 1];
+        IERC20(p1[p1.length - 1]).approve(r2, intermediate);
+
+        uint[] memory a2 = IUniswapV2Router(r2).swapExactTokensForTokens(
+            intermediate,
+            0,
+            p2,
+            address(this),
+            block.timestamp + 300
+        );
+
+        return a2[a2.length - 1];
     }
 
-    // ========= MOCK ERC20 TEST CYCLE =========
-
-    function testMockCycle(
-        address asset,
-        uint256 amount,
-        bytes calldata params
-    ) external onlyOwner {
-        require(amount > 0, "amount=0");
-
-        uint256 beforeOwner = IERC20(asset).balanceOf(owner);
-        uint256 beforeExec = IERC20(asset).balanceOf(address(this));
-
-        emit MockCycleStarted(asset, amount, params);
-
-        IERC20(asset).transferFrom(owner, address(this), amount);
-
-        int256 pnl = _strategy(asset, amount, params);
-
-        IERC20(asset).transfer(owner, amount);
-
-        uint256 afterOwner = IERC20(asset).balanceOf(owner);
-        uint256 afterExec = IERC20(asset).balanceOf(address(this));
-
-        int256 execDelta = int256(afterExec) - int256(beforeExec);
-        int256 ownerDelta = int256(afterOwner) - int256(beforeOwner);
-
-        int256 reportedPnl = execDelta;
-
-        emit MockCycleCompleted(asset, amount, reportedPnl, params);
-
-        ownerDelta; // currently unused
-        pnl;
+    function withdrawToken(address token, uint256 amount) external onlyOwner {
+        IERC20(token).transfer(owner, amount);
     }
 
-    // ========= INTERNAL STRATEGY HOOK =========
-
-    /**
-     * @dev Strategy entry point.
-     *
-     * params (when non-empty):
-     *   (address router, address tokenIn, address tokenOut, uint256 minOutBps)
-     *
-     * For now we only decode and sanity-check; no Uniswap calls are made here.
-     */
-    function _strategy(
-        address asset,
-        uint256 amount,
-        bytes memory params
-    ) internal returns (int256 pnl) {
-        // Neutral path for empty params (backwards compatible).
-        if (params.length == 0) {
-            pnl = 0;
-            emit StrategyExecuted(asset, amount, pnl, params);
-            return pnl;
-        }
-
-        (
-            address router,
-            address tokenIn,
-            address tokenOut,
-            uint256 minOutBps
-        ) = abi.decode(params, (address, address, address, uint256));
-
-        require(minOutBps <= 10_000, "minOutBps>100%");
-        require(tokenIn == asset, "tokenIn!=asset");
-
-        // Currently we don't act on router/tokenOut/minOutBps; they are logged only.
-        router;
-        tokenOut;
-        amount;
-
-        pnl = 0;
-
-        emit StrategyExecuted(asset, amount, pnl, params);
-        return pnl;
-    }
+    receive() external payable {}
 }
