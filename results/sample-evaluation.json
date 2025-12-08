@@ -1,0 +1,15 @@
+{
+  "timestamp": "2025-12-08T05:13:03.106Z",
+  "tradeId": 1,
+  "profitable": false,
+  "reason": "Below min profit threshold",
+  "path": "UNI→SUSHI",
+  "netPnL": "-8.507",
+  "breakdown": {
+    "amountIn": "1000.0",
+    "amountOut": "993.498",
+    "flashLoanFee": "0.5",
+    "gasCostUsdc": "1.505",
+    "slippagePercent": "0.65"
+  }
+}

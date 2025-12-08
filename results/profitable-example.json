@@ -1,0 +1,17 @@
+{
+  "timestamp": "2025-12-08T10:30:15.234Z",
+  "tradeId": 42,
+  "profitable": true,
+  "reason": "All safety checks passed",
+  "roi": "1.23",
+  "path": "SUSHI→UNI",
+  "netPnL": "12.30",
+  "breakdown": {
+    "amountIn": "1000.0",
+    "amountOut": "1014.80",
+    "flashLoanFee": "0.5",
+    "gasCostUsdc": "2.0",
+    "slippagePercent": "0.42"
+  },
+  "note": "Hypothetical profitable scenario during market volatility"
+}
