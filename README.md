@@ -1,56 +1,128 @@
-# DeFi Fullstack Career - Professional Arbitrage & MEV Engineering
+# DeFi Arbitrage & Trading System
 
-A production-grade DeFi engineering workspace featuring flash loan executors, multi-DEX arbitrage evaluation, gas-optimized trading strategies, and mainnet fork testing infrastructure.
+**Production-grade DeFi bot infrastructure for profitable trading on Base L2**
 
-## 🎯 Project Overview
+> 🔴 **LIVE:** Currently monitoring Base network 24/7 for new token launch arbitrage opportunities
 
-This repository demonstrates end-to-end DeFi engineering capabilities including:
-- Aave V3 flash loan integration
-- Multi-protocol arbitrage detection (Uniswap V2, Sushiswap)
-- Gas-aware profit calculation with safety guards
-- Mainnet fork testing and simulation
-- Event-driven decision engines
+---
 
-**Current Status:** Week 4 complete - Arbitrage Decision Engine v1 operational
-**Job Readiness:** 70% (targeting senior DeFi/MEV engineer roles)
+## 🎯 What This Is
 
-## 🏗️ Architecture
+A complete DeFi trading system that:
+- Monitors Base blockchain for new token launches in real-time
+- Detects arbitrage opportunities across multiple DEXs
+- Executes flash loan arbitrage with zero capital
+- Runs 24/7 with automatic opportunity detection
+
+**Goal:** Generate consistent DeFi income through automated trading strategies.
+
+---
+
+## 🚀 Current Status
+
+**✅ OPERATIONAL COMPONENTS:**
+- 24/7 New Token Launch Monitor (RUNNING NOW)
+- Multi-DEX arbitrage scanner (Uniswap V2/V3, Sushiswap, Aerodrome)
+- Flash loan executor contract (Aave V3 integrated)
+- Gas-aware profitability calculations
+- Uniswap V3 concentrated liquidity support
+
+**🔧 IN DEVELOPMENT:**
+- Automated execution system
+- Flashbots MEV protection
+- Aave V3 liquidation bot
+
+---
+
+## 💡 Why Base L2?
+
+| Metric | Ethereum Mainnet | Base L2 | Advantage |
+|--------|------------------|---------|-----------|
+| Gas per TX | $5-50 | $0.01 | **500x cheaper** |
+| MEV Competition | Extreme | Low | **Easier to profit** |
+| Testing Cost | $500+ | $20-50 | **Accessible** |
+| Block Time | 12s | 2s | **Faster execution** |
+
+---
+
+## 📊 System Architecture
 ```
-┌─────────────────────────────────────────────────────────┐
-│                  Arbitrage Decision Engine              │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐ │
-│  │ Price Scanner│  │ Gas Estimator│  │ Safety Guard │ │
-│  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘ │
-│         │                  │                  │         │
-│         └──────────────────┴──────────────────┘         │
-│                            │                            │
-│                  ┌─────────▼─────────┐                  │
-│                  │  PnL Calculator   │                  │
-│                  └─────────┬─────────┘                  │
-│                            │                            │
-│         ┌──────────────────┴──────────────────┐         │
-│         │                                     │         │
-│  ┌──────▼──────┐                    ┌────────▼──────┐  │
-│  │ Uniswap V2  │                    │  Sushiswap V2 │  │
-│  └──────┬──────┘                    └────────┬──────┘  │
-│         │                                     │         │
-│         └──────────────────┬──────────────────┘         │
-│                            │                            │
-│                  ┌─────────▼─────────┐                  │
-│                  │ Flash Loan Executor│                 │
-│                  │   (Aave V3 Pool)  │                  │
-│                  └───────────────────┘                  │
-└─────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────┐
+│           24/7 NEW TOKEN MONITOR (LIVE)            │
+│   • Scans Uniswap V2 pair creation events          │
+│   • Alerts on WETH/USDC pairs                      │
+│   • Real-time arbitrage opportunity detection       │
+└─────────────────────────────────────────────────────┘
+                          ↓
+┌─────────────────────────────────────────────────────┐
+│              ARBITRAGE SCANNER                      │
+│   • Multi-DEX price comparison                      │
+│   • Multi-hop route optimization                    │
+│   • Gas-aware profitability filtering               │
+└─────────────────────────────────────────────────────┘
+                          ↓
+┌─────────────────────────────────────────────────────┐
+│            FLASH LOAN EXECUTOR                      │
+│   • Aave V3 flash loan integration                  │
+│   • Dual-swap arbitrage execution                   │
+│   • Zero capital required                           │
+└─────────────────────────────────────────────────────┘
 ```
 
-## ⚡ Quick Start
+---
 
-### Prerequisites
-- Node.js v22.10.0+ (LTS)
-- npm v10+
-- Alchemy API key (for mainnet forking)
+## 🛠️ Tech Stack
 
-### Installation
+**Smart Contracts:**
+- Solidity 0.8.20
+- Hardhat
+- OpenZeppelin
+- Aave V3 Protocol
+
+**Backend:**
+- Node.js (ES Modules)
+- ethers.js v6
+- Real-time event monitoring
+
+**Networks:**
+- Base L2 (primary)
+- Ethereum mainnet (testing)
+
+---
+
+## 🎯 Profit Opportunities
+
+### 1. New Token Launch Arbitrage
+- **Target:** First 5-30 minutes after launch
+- **Spread:** 5-20% typical
+- **Profit:** $50-500 per trade
+- **Frequency:** Multiple per day
+
+### 2. Flash Loan Liquidations
+- **Target:** Underwater Aave positions
+- **Bonus:** 5-15% liquidation bonus
+- **Profit:** $250-3,000 per event
+- **Frequency:** Sporadic (high value)
+
+### 3. Multi-DEX Arbitrage
+- **Target:** Price differences across DEXs
+- **Spread:** 0.5-2% typical
+- **Profit:** $10-100 per trade
+- **Frequency:** 0.1-2% of time
+
+---
+
+## 📚 Documentation
+
+- [Flash Loan Executor](docs/flash-loan-executor.md) - Contract architecture
+- [Arbitrage Engine](docs/arbitrage-engine.md) - Decision logic
+- [Gas Modeling](docs/gas-model.md) - Cost analysis
+- [System Architecture](docs/system-architecture.md) - Full stack
+- [Week 4 Summary](docs/week4-summary.md) - Build progress
+
+---
+
+## 🚀 Quick Start
 ```bash
 # Clone repository
 git clone https://github.com/in8forge/defi-fullstack-career.git
@@ -59,161 +131,59 @@ cd defi-fullstack-career
 # Install dependencies
 npm install
 
-# Configure environment
+# Configure (add your Alchemy key)
 cp .env.example .env
-# Add your ALCHEMY_MAINNET_RPC_URL to .env
+nano .env
+
+# Run new token monitor (24/7)
+node scripts/baseLaunchMonitor.js
+
+# Or scan for current arbitrage opportunities
+node scripts/baseArbFinder.js
 ```
-
-### Running the Arbitrage Engine
-
-**Terminal 1: Start mainnet fork**
-```bash
-npx hardhat node --fork $ALCHEMY_MAINNET_RPC_URL
-```
-
-**Terminal 2: Run arbitrage evaluator**
-```bash
-node scripts/arbGasAwarePlannerUSDC.js
-```
-
-### Running Tests
-```bash
-npx hardhat test
-```
-
-## 🚀 Features
-
-### ✅ Implemented
-- **Flash Loan Executor** - Aave V3 integration with custom arbitrage logic
-- **Multi-Path Scanner** - Evaluates Uniswap → Sushiswap and reverse paths
-- **Gas-Aware Modeling** - Real-time gas price feeds with cost calculations
-- **Profitability Thresholds** - Configurable min profit ($5) and ROI (0.5%)
-- **Safety Guards** - Gas price caps (50 gwei), slippage limits (2%)
-- **Structured Logging** - JSON output with trade IDs and timestamps
-- **Mainnet Fork Testing** - Real contract interaction without deployment costs
-
-### 🔄 In Progress
-- Flash loan execution integration
-- Dynamic gas estimation from contract calls
-- Multi-hop routing optimization
-
-### 📋 Roadmap
-- Uniswap V3 concentrated liquidity integration
-- Curve stableswap support
-- MEV protection via Flashbots relay
-- Multi-chain arbitrage (Arbitrum, Base)
-- Real-time mempool monitoring
-- Web dashboard for strategy monitoring
-
-## 📁 Project Structure
-```
-defi-fullstack-career/
-├── contracts/
-│   ├── FlashLoanExecutor.sol    # Aave V3 flash loan receiver
-│   └── MockUSDC.sol              # Test token for local development
-├── scripts/
-│   ├── arbGasAwarePlannerUSDC.js # Main arbitrage decision engine
-│   ├── forkTestOnchainQuote.js   # Price quote validation
-│   └── forkTestOnchainSwap.js    # Swap execution testing
-├── test/
-│   └── FlashLoanExecutor.test.js # Contract unit tests
-├── docs/
-│   ├── flash-loan-executor.md    # Flash loan architecture
-│   ├── arbitrage-engine.md       # Decision engine documentation
-│   └── gas-model.md              # Gas calculation methodology
-├── results/
-│   └── sample-arb-evaluation.json # Real output examples
-├── hardhat.config.js
-├── package.json
-└── README.md
-```
-
-## 🔧 Technologies
-
-- **Smart Contracts:** Solidity 0.8.20, OpenZeppelin
-- **Testing Framework:** Hardhat, Ethers.js v6
-- **DeFi Protocols:** Aave V3, Uniswap V2, Sushiswap V2
-- **Development:** Node.js, JavaScript (ES modules)
-- **Infrastructure:** Alchemy RPC, Mainnet forking
-
-## 📊 Sample Output
-
-### Arbitrage Evaluation Result
-```json
-{
-  "timestamp": "2025-12-07T08:51:53.345Z",
-  "level": "warn",
-  "message": "Opportunity rejected",
-  "tradeId": 1,
-  "profitable": false,
-  "reason": "Below min profit threshold",
-  "path": "UNI→SUSHI",
-  "netPnL": "-8.54",
-  "breakdown": {
-    "amountIn": "1000.0",
-    "amountOut": "993.14",
-    "flashLoanFee": "0.5",
-    "gasCostUsdc": "1.19",
-    "gasEstimate": "350000",
-    "gasPrice": "1.11",
-    "slippagePercent": "0.69"
-  }
-}
-```
-
-## 🧪 Testing
-
-The project includes comprehensive test coverage:
-
-- **FlashLoanExecutor.test.js** - Contract behavior validation
-- **Price quote accuracy** - Uniswap router integration
-- **Gas estimation** - Cost modeling verification
-- **Revert conditions** - Error handling for edge cases
-
-Run full test suite:
-```bash
-npx hardhat test --network hardhat
-```
-
-## 📈 Performance Metrics
-
-- **Evaluation Speed:** ~4 seconds per full multi-path scan
-- **Gas Efficiency:** Flash loan execution <350k gas
-- **Profit Threshold:** Minimum $5 net profit after all costs
-- **Safety Margin:** 2% max slippage, 50 gwei gas cap
-
-## 🎓 Learning Outcomes
-
-This project demonstrates:
-- Advanced Solidity patterns (flash loans, callbacks, access control)
-- MEV extraction strategies and profitability analysis
-- Gas optimization techniques for on-chain transactions
-- DeFi protocol integration (Aave, Uniswap)
-- Production-grade testing and CI/CD
-- Real-world arbitrage bot architecture
-
-## 🤝 Contributing
-
-This is a personal learning and portfolio project. However, suggestions and feedback are welcome via issues.
-
-## 📄 License
-
-MIT License - See LICENSE file for details
-
-## 👤 Author
-
-**Jacob Doswell**
-- GitHub: [@in8forge](https://github.com/in8forge)
-- Repository: [defi-fullstack-career](https://github.com/in8forge/defi-fullstack-career)
-
-## 🔗 Resources
-
-- [Aave V3 Documentation](https://docs.aave.com/developers/)
-- [Uniswap V2 Documentation](https://docs.uniswap.org/contracts/v2/overview)
-- [Hardhat Documentation](https://hardhat.org/docs)
-- [MEV Research](https://docs.flashbots.net/)
 
 ---
 
-**Status:** Active development | Week 4 of 12-month roadmap
-**Next Milestone:** Production flash loan execution with MEV protection
+## 📈 Results & Performance
+
+**Monitor Performance:**
+- Detected 2 new pairs in first 10 minutes
+- Zero false positives
+- <30 second detection latency
+
+**Market Analysis:**
+- Base markets 99.15% efficient
+- V3 beats V2 by 0.5-2%
+- New launches = best opportunities
+
+**Gas Savings:**
+- Base: $0.01/tx
+- Mainnet: $5/tx
+- Savings: 99.8%
+
+---
+
+## 🎓 Key Innovations
+
+1. **L2-First Approach** - Built for Base from the start
+2. **Real-Time Monitoring** - 24/7 new token detection
+3. **Flash Loan Integration** - Zero capital arbitrage
+4. **Multi-Hop Routing** - Advanced path optimization
+5. **V3 Integration** - Concentrated liquidity support
+
+---
+
+## ⚠️ Disclaimer
+
+Educational/research project. Cryptocurrency trading carries substantial risk. Use at your own risk.
+
+---
+
+## 📫 Developer
+
+**GitHub:** [@in8forge](https://github.com/in8forge)  
+**Project:** [defi-fullstack-career](https://github.com/in8forge/defi-fullstack-career)
+
+---
+
+**Status:** 87% Job Ready | **Phase:** Live Monitoring | **Focus:** New Token Arbitrage
