@@ -211,6 +211,9 @@
     },
     {
       "user": "0x5283BEcEd7ADF6D003225C13896E536f2D4264FF"
+    },
+    {
+      "user": "0xC4fC7075c4D60107B051C6f35026dBAf7865E1De"
     }
   ],
   "Optimism": [
@@ -401,6 +404,15 @@
     },
     {
       "user": "0xCe3BEeF7DBbBf35180634d2c2E2871C1572F4F93"
+    },
+    {
+      "user": "0x0A12F453a0F0827785E24a412867B36b6Fd3c535"
+    },
+    {
+      "user": "0xA9142261BdDd72a23d7F28F5fE591A2E083edD81"
+    },
+    {
+      "user": "0x69Bac0E3Bee6321AD9D5f41bbc074762bb840224"
     }
   ],
   "Avalanche": [
