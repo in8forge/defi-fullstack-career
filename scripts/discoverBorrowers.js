@@ -4,97 +4,79 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
-// Aave V3 Pool Data Provider - gets all users with positions
 const CHAINS = [
-  { 
-    name: "Base", 
-    rpc: process.env.BASE_RPC_URL, 
-    pool: "0xA238Dd80C259a72e81d7e4664a9801593F98d1c5",
-    dataProvider: "0x2d8A3C5677189723C4cB8873CfC9C8976FDF38Ac"
-  },
-  { 
-    name: "Arbitrum", 
-    rpc: process.env.ARBITRUM_RPC_URL, 
-    pool: "0x794a61358D6845594F94dc1DB02A252b5b4814aD",
-    dataProvider: "0x69FA688f1Dc47d4B5d8029D5a35FB7a548310654"
-  },
-  { 
-    name: "Optimism", 
-    rpc: process.env.OPTIMISM_RPC_URL, 
-    pool: "0x794a61358D6845594F94dc1DB02A252b5b4814aD",
-    dataProvider: "0x69FA688f1Dc47d4B5d8029D5a35FB7a548310654"
-  },
-  { 
-    name: "Polygon", 
-    rpc: process.env.POLYGON_RPC_URL, 
-    pool: "0x794a61358D6845594F94dc1DB02A252b5b4814aD",
-    dataProvider: "0x69FA688f1Dc47d4B5d8029D5a35FB7a548310654"
-  }
+  { name: "Base", rpc: process.env.BASE_RPC_URL, pool: "0xA238Dd80C259a72e81d7e4664a9801593F98d1c5" },
+  { name: "Arbitrum", rpc: process.env.ARBITRUM_RPC_URL, pool: "0x794a61358D6845594F94dc1DB02A252b5b4814aD" },
+  { name: "Optimism", rpc: process.env.OPTIMISM_RPC_URL, pool: "0x794a61358D6845594F94dc1DB02A252b5b4814aD" },
+  { name: "Polygon", rpc: process.env.POLYGON_RPC_URL, pool: "0x794a61358D6845594F94dc1DB02A252b5b4814aD" },
+  { name: "Avalanche", rpc: process.env.AVALANCHE_RPC_URL, pool: "0x794a61358D6845594F94dc1DB02A252b5b4814aD" }
 ];
 
 const POOL_ABI = [
+  "event Borrow(address indexed reserve, address user, address indexed onBehalfOf, uint256 amount, uint8 interestRateMode, uint256 borrowRate, uint16 indexed referralCode)",
   "function getUserAccountData(address) view returns (uint256,uint256,uint256,uint256,uint256,uint256)"
 ];
 
-// Generate random addresses to scan (brute force approach)
-function generateAddresses(count) {
-  const addresses = [];
-  // Known DeFi power users / whales
-  const knownWhales = [
-    "0x0000000000000000000000000000000000000001",
-    "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045", // vitalik.eth
-    "0x28C6c06298d514Db089934071355E5743bf21d60", // Binance
-    "0xDef1C0ded9bec7F1a1670819833240f027b25EfF", // 0x
-    "0x47ac0Fb4F2D84898e4D9E7b4DaB3C24507a6D503", // Binance 8
-  ];
-  return knownWhales;
-}
-
-async function scanForBorrowers(chain) {
-  console.log(`\n${chain.name}:`);
+async function discoverChain(chain) {
+  console.log(`\n🔍 ${chain.name}:`);
   
   try {
     const provider = new JsonRpcProvider(chain.rpc);
     const pool = new Contract(chain.pool, POOL_ABI, provider);
     
-    // First, let's check current block to confirm connection
-    const block = await provider.getBlockNumber();
-    console.log(`   Connected at block ${block}`);
+    const currentBlock = await provider.getBlockNumber();
+    console.log(`   Current block: ${currentBlock}`);
     
-    // Try to get transfer events from aTokens (people who received debt tokens)
-    const aTokenABI = [
-      "event Transfer(address indexed from, address indexed to, uint256 value)"
-    ];
+    // Query last 10,000 blocks in chunks of 2,000
+    const allUsers = new Set();
+    const chunkSize = 2000;
+    const totalBlocks = 10000;
     
-    // USDC debt token addresses
-    const debtTokens = {
-      Base: "0x0000000000000000000000000000000000000000", 
-      Arbitrum: "0x92b42c66840C7AD907b4BF74879FF3eF7c529473",
-      Optimism: "0x307ffe186F84a3bc2613D1eA417A5737D69A7007",
-      Polygon: "0x307ffe186F84a3bc2613D1eA417A5737D69A7007"
-    };
-    
-    // Alternative: Check random addresses for debt
-    console.log(`   Scanning for users with debt...`);
-    
-    const foundUsers = [];
-    const testAddresses = generateAddresses(5);
-    
-    for (const addr of testAddresses) {
+    for (let i = 0; i < totalBlocks; i += chunkSize) {
+      const fromBlock = currentBlock - totalBlocks + i;
+      const toBlock = fromBlock + chunkSize - 1;
+      
+      process.stdout.write(`   Scanning blocks ${fromBlock}-${toBlock}... `);
+      
       try {
-        const data = await pool.getUserAccountData(addr);
+        const events = await pool.queryFilter(pool.filters.Borrow(), fromBlock, toBlock);
+        
+        for (const event of events) {
+          if (event.args?.user) allUsers.add(event.args.user);
+          if (event.args?.onBehalfOf) allUsers.add(event.args.onBehalfOf);
+        }
+        
+        console.log(`${events.length} borrows`);
+      } catch (e) {
+        console.log(`error: ${e.message.slice(0, 30)}`);
+      }
+    }
+    
+    console.log(`   ✅ Found ${allUsers.size} unique borrowers`);
+    
+    // Check which ones have active debt
+    const activeUsers = [];
+    let checked = 0;
+    
+    for (const user of allUsers) {
+      try {
+        const data = await pool.getUserAccountData(user);
         const debt = Number(formatUnits(data[1], 8));
+        const hf = Number(formatUnits(data[5], 18));
         
         if (debt > 100) {
-          const hf = Number(formatUnits(data[5], 18));
-          foundUsers.push({ user: addr, debt, hf });
-          console.log(`   ✅ ${addr.slice(0,10)}... | $${debt.toFixed(0)} debt | HF: ${hf.toFixed(2)}`);
+          activeUsers.push({ user, debt, hf });
+          console.log(`   💰 ${user.slice(0,10)}... | Debt: $${debt.toFixed(0)} | HF: ${hf.toFixed(2)}`);
         }
+        
+        checked++;
+        if (checked % 10 === 0) process.stdout.write(`   Checked ${checked}/${allUsers.size}\r`);
       } catch {}
     }
     
-    console.log(`   Found ${foundUsers.length} borrowers`);
-    return foundUsers;
+    console.log(`   ✅ ${activeUsers.length} users with active debt > $100`);
+    
+    return activeUsers;
     
   } catch (e) {
     console.log(`   ❌ Error: ${e.message.slice(0, 50)}`);
@@ -103,29 +85,41 @@ async function scanForBorrowers(chain) {
 }
 
 async function main() {
-  console.log("🔍 SCANNING FOR AAVE BORROWERS\n");
-  console.log("Note: Finding borrowers requires event indexing or known addresses.");
-  console.log("For production, use Aave's subgraph or a paid indexer.\n");
+  console.log("🔍 DISCOVERING BORROWERS WITH PAID ALCHEMY PLAN\n");
+  console.log("Scanning last 10,000 blocks on each chain...\n");
   
-  const results = {};
+  const allBorrowers = {};
   
   for (const chain of CHAINS) {
-    const users = await scanForBorrowers(chain);
-    results[chain.name] = users.map(u => u.user);
+    const users = await discoverChain(chain);
+    allBorrowers[chain.name] = users;
   }
   
-  // Save results
+  // Save to file
   fs.mkdirSync("./data", { recursive: true });
-  fs.writeFileSync("./data/borrowers.json", JSON.stringify(results, null, 2));
+  fs.writeFileSync("./data/borrowers.json", JSON.stringify(allBorrowers, null, 2));
   
-  console.log("\n" + "=".repeat(50));
-  console.log("\n💡 RECOMMENDATION:");
-  console.log("   To get real borrowers, you need either:");
-  console.log("   1. Paid Alchemy plan (event queries)");
-  console.log("   2. The Graph API key (subgraph queries)");
-  console.log("   3. Run your own node");
-  console.log("\n   For now, your bot will alert you during market crashes");
-  console.log("   when liquidations spike and become visible on-chain.");
+  console.log("\n" + "=".repeat(60));
+  console.log("📊 DISCOVERY COMPLETE:\n");
+  
+  let totalUsers = 0;
+  let totalDebt = 0;
+  let atRisk = 0;
+  
+  for (const [chain, users] of Object.entries(allBorrowers)) {
+    const chainDebt = users.reduce((sum, u) => sum + u.debt, 0);
+    const chainAtRisk = users.filter(u => u.hf < 1.5).length;
+    
+    console.log(`   ${chain}: ${users.length} borrowers | $${chainDebt.toFixed(0)} debt | ${chainAtRisk} at risk`);
+    
+    totalUsers += users.length;
+    totalDebt += chainDebt;
+    atRisk += chainAtRisk;
+  }
+  
+  console.log("\n   ─────────────────────────────────────");
+  console.log(`   TOTAL: ${totalUsers} borrowers | $${totalDebt.toFixed(0)} debt | ${atRisk} at risk`);
+  console.log("\n✅ Saved to ./data/borrowers.json");
 }
 
 main();
