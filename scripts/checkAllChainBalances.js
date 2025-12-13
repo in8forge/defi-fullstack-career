@@ -4,11 +4,11 @@ import dotenv from "dotenv";
 dotenv.config();
 
 const CHAINS = [
-  { name: "Base", rpc: process.env.BASE_RPC_URL, symbol: "ETH" },
-  { name: "Polygon", rpc: process.env.POLYGON_RPC_URL, symbol: "MATIC" },
-  { name: "Avalanche", rpc: process.env.AVALANCHE_RPC_URL, symbol: "AVAX" },
-  { name: "Arbitrum", rpc: process.env.ARBITRUM_RPC_URL, symbol: "ETH" },
-  { name: "Optimism", rpc: process.env.OPTIMISM_RPC_URL, symbol: "ETH" }
+  { name: "Base", rpc: process.env.BASE_RPC_URL, symbol: "ETH", minGas: 0.001 },
+  { name: "Polygon", rpc: process.env.POLYGON_RPC_URL, symbol: "MATIC", minGas: 0.5 },
+  { name: "Avalanche", rpc: process.env.AVALANCHE_RPC_URL, symbol: "AVAX", minGas: 0.05 },
+  { name: "Arbitrum", rpc: process.env.ARBITRUM_RPC_URL, symbol: "ETH", minGas: 0.001 },
+  { name: "Optimism", rpc: process.env.OPTIMISM_RPC_URL, symbol: "ETH", minGas: 0.001 }
 ];
 
 async function main() {
@@ -16,24 +16,22 @@ async function main() {
   
   const wallet = new Wallet(process.env.PRIVATE_KEY);
   console.log(`Wallet: ${wallet.address}\n`);
-  console.log("─".repeat(50));
+  console.log("─".repeat(60));
   
   for (const chain of CHAINS) {
     try {
       const provider = new JsonRpcProvider(chain.rpc);
       const balance = await provider.getBalance(wallet.address);
-      const formatted = Number(formatUnits(balance, 18)).toFixed(6);
+      const formatted = Number(formatUnits(balance, 18));
       
-      const status = Number(formatted) > 0.01 ? "✅" : "❌ Need gas";
-      console.log(`${chain.name.padEnd(12)} ${formatted.padStart(12)} ${chain.symbol}  ${status}`);
+      const status = formatted >= chain.minGas ? "✅ Ready to deploy" : "❌ Need gas";
+      console.log(`${chain.name.padEnd(12)} ${formatted.toFixed(6).padStart(12)} ${chain.symbol.padEnd(6)} ${status}`);
     } catch (e) {
-      console.log(`${chain.name.padEnd(12)} Error: ${e.message.slice(0, 30)}`);
+      console.log(`${chain.name.padEnd(12)} Error`);
     }
   }
   
-  console.log("─".repeat(50));
-  console.log("\n💡 To deploy liquidators, you need gas on each chain.");
-  console.log("   Bridge from Base or buy on exchange.\n");
+  console.log("─".repeat(60));
 }
 
 main();
