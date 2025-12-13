@@ -5,7 +5,8 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
-const SCAN_INTERVAL = 1000;
+const SCAN_INTERVAL = 2000;      // 2 seconds between position checks
+const DISCOVERY_INTERVAL = 300000; // Discover new borrowers every 5 minutes
 const MIN_PROFIT_USD = 10;
 const AUTO_EXECUTE = process.env.ENABLE_EXECUTION === "true";
 
@@ -48,13 +49,58 @@ const CHAINS = {
 };
 
 const AAVE_ABI = [
-  "function getUserAccountData(address) view returns (uint256,uint256,uint256,uint256,uint256,uint256)"
+  "function getUserAccountData(address) view returns (uint256,uint256,uint256,uint256,uint256,uint256)",
+  "event Borrow(address indexed reserve, address user, address indexed onBehalfOf, uint256 amount, uint8 interestRateMode, uint256 borrowRate, uint16 indexed referralCode)"
 ];
 
 const LIQUIDATOR_ABI = [
   "function executeLiquidation(address collateralAsset, address debtAsset, address user, uint256 debtToCover) external"
 ];
 
+// ============ DISCOVERY ============
+async function discoverNewBorrowers(chain, chainConfig, existingUsers) {
+  try {
+    const provider = new JsonRpcProvider(chainConfig.rpc);
+    const pool = new Contract(chainConfig.pool, AAVE_ABI, provider);
+    
+    const currentBlock = await provider.getBlockNumber();
+    const fromBlock = currentBlock - 1000; // Last ~30 minutes
+    
+    const events = await pool.queryFilter(pool.filters.Borrow(), fromBlock, currentBlock);
+    
+    const newUsers = [];
+    for (const event of events) {
+      const user = event.args?.user || event.args?.onBehalfOf;
+      if (user && !existingUsers.has(user)) {
+        newUsers.push(user);
+        existingUsers.add(user);
+      }
+    }
+    
+    return newUsers;
+  } catch {
+    return [];
+  }
+}
+
+async function discoverAllChains(allUsers) {
+  let totalNew = 0;
+  
+  for (const [chain, config] of Object.entries(CHAINS)) {
+    if (!allUsers[chain]) allUsers[chain] = new Set();
+    
+    const newUsers = await discoverNewBorrowers(chain, config, allUsers[chain]);
+    
+    if (newUsers.length > 0) {
+      console.log(`   📥 ${chain}: +${newUsers.length} new borrowers`);
+      totalNew += newUsers.length;
+    }
+  }
+  
+  return totalNew;
+}
+
+// ============ POSITION CHECK ============
 async function checkPosition(chainConfig, user) {
   try {
     const provider = new JsonRpcProvider(chainConfig.rpc);
@@ -68,16 +114,9 @@ async function checkPosition(chainConfig, user) {
   } catch { return null; }
 }
 
+// ============ EXECUTION ============
 async function executeLiquidation(chain, chainConfig, user, debt) {
-  if (!chainConfig.liquidator) {
-    console.log(`   ⚠️ No liquidator on ${chain}`);
-    return { success: false };
-  }
-  
-  if (!AUTO_EXECUTE) {
-    console.log(`   ⚠️ Auto-execute OFF. Set ENABLE_EXECUTION=true`);
-    return { success: false };
-  }
+  if (!chainConfig.liquidator || !AUTO_EXECUTE) return { success: false };
   
   try {
     const provider = new JsonRpcProvider(chainConfig.rpc);
@@ -87,13 +126,13 @@ async function executeLiquidation(chain, chainConfig, user, debt) {
     const debtToCover = parseUnits((debt * 0.5).toFixed(6), 6);
     
     console.log(`\n   🚀 EXECUTING on ${chain}...`);
-    console.log(`   Debt to cover: $${(debt * 0.5).toFixed(2)}`);
     
     const tx = await liquidator.executeLiquidation(
       chainConfig.weth,
       chainConfig.usdc,
       user,
-      debtToCover
+      debtToCover,
+      { gasLimit: 800000 }
     );
     
     console.log(`   📤 TX: ${tx.hash}`);
@@ -106,7 +145,6 @@ async function executeLiquidation(chain, chainConfig, user, debt) {
       await alertLiquidation(
         `🎉🎉🎉 **LIQUIDATION SUCCESS!** 🎉🎉🎉\n\n` +
         `**${chain}**\n` +
-        `User: \`${user}\`\n` +
         `Profit: ~$${profit.toFixed(2)}\n` +
         `TX: \`${tx.hash}\``
       );
@@ -120,101 +158,129 @@ async function executeLiquidation(chain, chainConfig, user, debt) {
   return { success: false };
 }
 
+// ============ MAIN ============
 async function main() {
   console.log("\n" + "=".repeat(70));
-  console.log("🏆 WINNING LIQUIDATION BOT - ALL CHAINS");
+  console.log("🏆 WINNING LIQUIDATION BOT - AUTO DISCOVERY");
   console.log("=".repeat(70));
-  console.log(`\n⚡ Speed: ${SCAN_INTERVAL}ms`);
+  console.log(`\n⚡ Scan interval: ${SCAN_INTERVAL}ms`);
+  console.log(`🔍 Discovery interval: ${DISCOVERY_INTERVAL / 1000}s`);
   console.log(`💰 Min profit: $${MIN_PROFIT_USD}`);
   console.log(`🤖 Auto-execute: ${AUTO_EXECUTE ? "ON 🟢" : "OFF 🔴"}`);
   
-  // Show liquidators
-  console.log(`\n📋 Liquidators deployed:`);
+  console.log(`\n📋 Liquidators:`);
   for (const [chain, config] of Object.entries(CHAINS)) {
-    const status = config.liquidator ? "✅" : "❌";
-    console.log(`   ${status} ${chain}: ${config.liquidator || "Not deployed"}`);
+    console.log(`   ✅ ${chain}: ${config.liquidator}`);
   }
 
-  const borrowers = JSON.parse(fs.readFileSync('./data/borrowers.json', 'utf8'));
+  // Load existing borrowers
+  let borrowersData = {};
+  try {
+    borrowersData = JSON.parse(fs.readFileSync('./data/borrowers.json', 'utf8'));
+  } catch {}
   
-  const criticalUsers = [];
-  for (const [chain, users] of Object.entries(borrowers)) {
-    if (!CHAINS[chain]) continue;
-    for (const u of users) {
-      if (u.hf < 1.15) criticalUsers.push({ chain, ...u });
-    }
+  // Convert to Sets for easy lookup
+  const allUsers = {};
+  for (const [chain, users] of Object.entries(borrowersData)) {
+    allUsers[chain] = new Set(users.map(u => u.user));
   }
   
-  // Sort by HF (lowest first = most urgent)
-  criticalUsers.sort((a, b) => a.hf - b.hf);
-  
-  console.log(`\n🎯 Monitoring ${criticalUsers.length} critical positions`);
-  console.log(`💰 Total potential: $${criticalUsers.reduce((s, u) => s + u.debt * 0.05, 0).toLocaleString()}\n`);
+  const totalUsers = Object.values(allUsers).reduce((s, set) => s + set.size, 0);
+  console.log(`\n📊 Loaded ${totalUsers} existing borrowers`);
   
   await alertLiquidation(
-    `🏆 **Multi-Chain Liquidator Started!**\n\n` +
+    `🏆 **Auto-Discovery Liquidator Started!**\n\n` +
     `⚡ ${SCAN_INTERVAL}ms scans\n` +
-    `🎯 ${criticalUsers.length} critical positions\n` +
-    `🌐 5 chains active\n` +
-    `💰 $${criticalUsers.reduce((s, u) => s + u.debt * 0.05, 0).toLocaleString()} potential`
+    `🔍 Discovers new borrowers every 5 min\n` +
+    `📊 ${totalUsers} borrowers loaded\n` +
+    `🌐 5 chains active`
   );
   
   let scans = 0;
+  let discoveries = 0;
   let executions = 0;
   let totalProfit = 0;
+  let lastDiscovery = 0;
   const alerted = new Set();
   
   while (true) {
     scans++;
+    const now = Date.now();
     
-    for (const target of criticalUsers) {
-      const chainConfig = CHAINS[target.chain];
-      const pos = await checkPosition(chainConfig, target.user);
+    // ============ DISCOVER NEW BORROWERS ============
+    if (now - lastDiscovery > DISCOVERY_INTERVAL) {
+      lastDiscovery = now;
+      discoveries++;
+      console.log(`\n🔍 Discovery #${discoveries}...`);
       
-      if (!pos || pos.debt < 100) continue;
+      const newCount = await discoverAllChains(allUsers);
       
-      // 🚨 LIQUIDATABLE
-      if (pos.hf > 0 && pos.hf < 1.0) {
-        const profit = pos.debt * 0.05;
+      if (newCount > 0) {
+        console.log(`   ✅ Found ${newCount} new borrowers!`);
         
-        if (!alerted.has(target.user)) {
-          alerted.add(target.user);
+        // Save updated list
+        const saveData = {};
+        for (const [chain, users] of Object.entries(allUsers)) {
+          saveData[chain] = [...users].map(u => ({ user: u }));
+        }
+        fs.writeFileSync('./data/borrowers.json', JSON.stringify(saveData, null, 2));
+      } else {
+        console.log(`   No new borrowers found`);
+      }
+    }
+    
+    // ============ CHECK ALL POSITIONS ============
+    for (const [chain, users] of Object.entries(allUsers)) {
+      const chainConfig = CHAINS[chain];
+      if (!chainConfig) continue;
+      
+      for (const user of users) {
+        const pos = await checkPosition(chainConfig, user);
+        if (!pos || pos.debt < 100) continue;
+        
+        // 🚨 LIQUIDATABLE
+        if (pos.hf > 0 && pos.hf < 1.0) {
+          const profit = pos.debt * 0.05;
           
-          console.log(`\n🚨🚨🚨 LIQUIDATABLE! 🚨🚨🚨`);
-          console.log(`   ${target.chain} | ${target.user}`);
-          console.log(`   Debt: $${pos.debt.toLocaleString()} | HF: ${pos.hf.toFixed(4)}`);
-          console.log(`   💰 Profit: $${profit.toLocaleString()}`);
-          
-          await alertLiquidation(
-            `🚨 **LIQUIDATABLE!**\n\n` +
-            `**${target.chain}**\n` +
-            `User: \`${target.user}\`\n` +
-            `Debt: $${pos.debt.toLocaleString()}\n` +
-            `HF: ${pos.hf.toFixed(4)}\n` +
-            `💰 Profit: $${profit.toLocaleString()}`
-          );
-          
-          // Execute if profitable
-          if (profit >= MIN_PROFIT_USD) {
-            const result = await executeLiquidation(target.chain, chainConfig, target.user, pos.debt);
-            if (result.success) {
-              executions++;
-              totalProfit += result.profit;
+          if (!alerted.has(user)) {
+            alerted.add(user);
+            
+            console.log(`\n🚨🚨🚨 LIQUIDATABLE! 🚨🚨🚨`);
+            console.log(`   ${chain} | ${user}`);
+            console.log(`   Debt: $${pos.debt.toLocaleString()} | HF: ${pos.hf.toFixed(4)}`);
+            console.log(`   💰 Profit: $${profit.toLocaleString()}`);
+            
+            await alertLiquidation(
+              `🚨 **LIQUIDATABLE!**\n\n` +
+              `**${chain}**\n` +
+              `User: \`${user}\`\n` +
+              `Debt: $${pos.debt.toLocaleString()}\n` +
+              `HF: ${pos.hf.toFixed(4)}\n` +
+              `💰 Profit: $${profit.toLocaleString()}`
+            );
+            
+            if (profit >= MIN_PROFIT_USD) {
+              const result = await executeLiquidation(chain, chainConfig, user, pos.debt);
+              if (result.success) {
+                executions++;
+                totalProfit += result.profit;
+              }
             }
           }
         }
-      }
-      
-      // ⚠️ Very close - log it
-      else if (pos.hf < 1.02 && scans % 20 === 0) {
-        console.log(`⚠️ CLOSE: ${target.chain} | ${target.user.slice(0,12)}... | $${pos.debt.toFixed(0)} | HF: ${pos.hf.toFixed(4)}`);
+        
+        // ⚠️ Very close
+        else if (pos.hf < 1.05 && scans % 30 === 0) {
+          console.log(`⚠️ CLOSE: ${chain} | ${user.slice(0,12)}... | $${pos.debt.toFixed(0)} | HF: ${pos.hf.toFixed(4)}`);
+        }
       }
     }
     
     // Status every 60 scans
     if (scans % 60 === 0) {
       const time = new Date().toLocaleTimeString();
-      console.log(`\n[${time}] Scans: ${scans} | Executions: ${executions} | Profit: $${totalProfit.toFixed(2)}`);
+      const totalUsers = Object.values(allUsers).reduce((s, set) => s + set.size, 0);
+      console.log(`\n[${time}] Scans: ${scans} | Users: ${totalUsers} | Executions: ${executions} | Profit: $${totalProfit.toFixed(2)}`);
     }
     
     await new Promise(r => setTimeout(r, SCAN_INTERVAL));
