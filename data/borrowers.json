@@ -188,6 +188,12 @@
     },
     {
       "user": "0x0abe0DEA1E358E7405Bbe9D1403747577dc9E7E6"
+    },
+    {
+      "user": "0xd03dc02d03064398A5ac5B0331F1F52330975264"
+    },
+    {
+      "user": "0x7508c453193bb54F705A1807dFc0455899fFc5F0"
     }
   ],
   "Arbitrum": [
@@ -439,6 +445,9 @@
     },
     {
       "user": "0x2825cE5921538d17cc15Ae00a8B24fF759C6CDaE"
+    },
+    {
+      "user": "0x93C078c1f6Cb8AE28f75C8050755b6d15674fE19"
     }
   ]
 }
