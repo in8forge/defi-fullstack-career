@@ -3,14 +3,14 @@
 > **Production-grade automated trading infrastructure**
 
 [![Status](https://img.shields.io/badge/Status-LIVE-brightgreen)]()
-[![Bots](https://img.shields.io/badge/Bots-3%20Active-blue)]()
+[![Week](https://img.shields.io/badge/Week-5%20Security-orange)]()
 [![Chains](https://img.shields.io/badge/Chains-Multi--Chain-purple)]()
 
 ---
 
 ## 👋 About
 
-This repository demonstrates **production DeFi infrastructure** built from scratch - smart contracts, automated bots, and multi-chain deployment.
+This repository demonstrates **production DeFi infrastructure** built from scratch - smart contracts, automated bots, security auditing, and multi-chain deployment.
 
 ---
 
@@ -27,8 +27,9 @@ Monitors lending protocols for liquidation opportunities using flash loans.
 ### 🔄 Arbitrage System
 Scans DEXs for price discrepancies.
 
-- Multi-chain, multi-DEX
+- Multi-hop path finding (100+ combinations)
 - Gas-aware profit calculations
+- Uniswap V2/V3 integration
 - Real-time scanning
 
 ### 🌾 LP Farming System
@@ -37,40 +38,74 @@ Automated liquidity provision with yield optimization.
 - Auto-compound rewards
 - Position management
 
+### 🔒 Security Auditing (Week 5)
+Smart contract security analysis and bug bounty hunting.
+
+- Manual contract auditing
+- Foundry PoC development
+- Code4rena bounty submissions
+- Vulnerability pattern recognition
+
+---
+
+## 📁 Repository Structure
+```
+├── contracts/              # Solidity smart contracts
+│   ├── FlashLoanExecutor.sol
+│   ├── FlashLiquidator.sol
+│   └── MockUSDC.sol
+├── scripts/                # Trading bots and utilities
+│   ├── arbitrage/          # Arb detection and execution
+│   └── monitoring/         # Health checks and alerts
+├── security/               # Week 5: Security module
+│   └── ai-auditor/         # AI-assisted audit tooling
+├── config/                 # Network configurations
+└── test/                   # Contract tests
+```
+
 ---
 
 ## 💡 Technical Skills
 
 **Smart Contracts**
 - Solidity 0.8.x
-- Flash loan integration
+- Flash loan integration (Aave V3)
 - Multi-chain deployment
 - Gas optimization
+
+**Security**
+- Manual code review
+- Foundry testing & PoCs
+- Bug bounty hunting (Code4rena)
+- Common vulnerability patterns
 
 **Backend**
 - Node.js / ethers.js v6
 - Real-time monitoring
-- Process management
+- Mainnet fork testing
 
 **DeFi Protocols**
-- Aave, Compound, Morpho
-- Uniswap, SushiSwap, Curve
-- Lending & AMM mechanics
+- Aave, Compound, Morpho (Lending)
+- Uniswap V2/V3, SushiSwap, Curve (DEX)
+- veToken systems (Solidly forks)
 
 **Infrastructure**
+- Hardhat development suite
 - Multi-chain RPC management
-- Discord/Telegram alerts
-- 24/7 operation
+- Alchemy integration
 
 ---
 
-## 🏗️ Repository Structure
-```
-├── contracts/          # Solidity smart contracts
-├── scripts/            # Trading bots and utilities
-├── config/             # Network configurations
-└── test/               # Contract tests
-```
+## 🗓️ Development Timeline
+
+| Week | Focus | Status |
+|------|-------|--------|
+| 1 | Environment setup, Hardhat | ✅ Complete |
+| 2 | ERC20 deployment, wallet funding | ✅ Complete |
+| 3 | Flash loans, Uniswap integration | ✅ Complete |
+| 4 | Mainnet fork testing, on-chain quotes | ✅ Complete |
+| 5 | Security auditing, bug bounties | 🔄 In Progress |
+| 6+ | Production deployment | 📋 Planned |
 
 ---
 
@@ -78,19 +113,25 @@ Automated liquidity provision with yield optimization.
 ```bash
 npm install
 cp .env.example .env
-# Configure your environment
+# Add your RPC URLs and keys to .env
 npx hardhat compile
+npx hardhat test
+```
+
+**Run mainnet fork:**
+```bash
+npx hardhat run scripts/forkTestOnchainSwap.js --network fork
 ```
 
 ---
 
 ## 🎓 Key Learnings
 
-- L2s dramatically reduce costs and enable new strategies
 - Flash loans enable capital-efficient execution
-- Multi-chain deployment multiplies opportunities
-- Real-time monitoring is essential for competitive execution
-- Proper validation prevents costly errors
+- Multi-hop arbitrage expands opportunity space
+- Security auditing requires understanding both code AND economics
+- Real CRITICAL bugs (direct fund theft) are rare in audited codebases
+- Most "HIGH" findings are actually MEDIUM or out of scope
 
 ---
 
