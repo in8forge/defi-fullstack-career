@@ -1,27 +1,26 @@
-# Node modules
-/node_modules
+# Dependencies
+node_modules/
 
-# Compilation output
-/dist
-
-# pnpm deploy output
-/bundle
-
-# Hardhat Build Artifacts
-/artifacts
-
-# Hardhat compilation (v2) support directory
-/cache
-
-# Typechain output
-/types
-
-# Hardhat coverage reports
-/coverage
-.env
+# Environment
 .env
 .env.local
 .env.*.local
+
+# Hardhat
+artifacts/
+cache/
+typechain-types/
+coverage/
+
+# Build
+dist/
+bundle/
+types/
+
+# External repos (copyright)
 contracts/Contracts/
-node_modules/
-contracts/Contracts/
+
+# OS/IDE
+.DS_Store
+.idea/
+.vscode/
