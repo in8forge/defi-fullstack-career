@@ -22,3 +22,6 @@
 .env
 .env.local
 .env.*.local
+contracts/Contracts/
+node_modules/
+contracts/Contracts/
