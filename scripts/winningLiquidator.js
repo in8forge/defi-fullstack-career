@@ -5,7 +5,7 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
-const SCAN_INTERVAL = 2000;      // 2 seconds between position checks
+const SCAN_INTERVAL = 1000;      // 2 seconds between position checks
 const DISCOVERY_INTERVAL = 300000; // Discover new borrowers every 5 minutes
 const MIN_PROFIT_USD = 10;
 const AUTO_EXECUTE = process.env.ENABLE_EXECUTION === "true";
