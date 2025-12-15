@@ -3,109 +3,94 @@
 > **Production-grade automated trading infrastructure**
 
 [![Status](https://img.shields.io/badge/Status-LIVE-brightgreen)]()
-[![Week](https://img.shields.io/badge/Week-5%20Security-orange)]()
-[![Chains](https://img.shields.io/badge/Chains-Multi--Chain-purple)]()
+[![Week](https://img.shields.io/badge/Week-5%20Complete-orange)]()
+[![Protocols](https://img.shields.io/badge/Protocols-4-purple)]()
 
 ---
 
 ## 👋 About
 
-This repository demonstrates **production DeFi infrastructure** built from scratch - smart contracts, automated bots, security auditing, and multi-chain deployment.
+Production DeFi infrastructure built from scratch - multi-protocol liquidation bots, automated trading systems, and security auditing.
 
 ---
 
-## 🤖 Systems Built
+## 🤖 Live Systems
 
-### 💀 Liquidation System
-Monitors lending protocols for liquidation opportunities using flash loans.
+### ⚡ Event-Based Liquidator V3
+**Multi-protocol liquidation bot with sub-10ms reaction time**
 
-- Multi-chain monitoring
-- Flash loan execution (zero capital)
-- Auto-discovery of new positions
-- Real-time alerts
+| Feature | Implementation |
+|---------|----------------|
+| Protocols | Aave V3, Compound V3, Morpho Blue, Radiant V2 |
+| Chains | Base, Polygon, Arbitrum, Avalanche |
+| Detection | WebSocket oracle subscriptions |
+| Efficiency | Multicall batching (100+ positions/call) |
+| Execution | Priority gas escalation (5x-20x) |
 
-### 🔄 Arbitrage System
-Scans DEXs for price discrepancies.
+### 📋 Order Keeper
+**GMX & Gains Network order execution**
 
-- Multi-hop path finding (100+ combinations)
-- Gas-aware profit calculations
-- Uniswap V2/V3 integration
-- Real-time scanning
-
-### 🌾 LP Farming System
-Automated liquidity provision with yield optimization.
-
-- Auto-compound rewards
-- Position management
-
-### 🔒 Security Auditing (Week 5)
-Smart contract security analysis and bug bounty hunting.
-
-- Manual contract auditing
-- Foundry PoC development
-- Code4rena bounty submissions
-- Vulnerability pattern recognition
+- Monitors pending limit orders
+- Executes when price conditions met
+- Earns keeper fees
 
 ---
 
-## 📁 Repository Structure
+## 🏗️ Architecture
 ```
-├── contracts/              # Solidity smart contracts
-│   ├── FlashLoanExecutor.sol
-│   ├── FlashLiquidator.sol
-│   └── MockUSDC.sol
-├── scripts/                # Trading bots and utilities
-│   ├── arbitrage/          # Arb detection and execution
-│   └── monitoring/         # Health checks and alerts
-├── security/               # Week 5: Security module
-│   └── ai-auditor/         # AI-assisted audit tooling
-├── config/                 # Network configurations
-└── test/                   # Contract tests
+┌─────────────────────────────────────────────────────────────┐
+│                    EVENT LIQUIDATOR V3                       │
+├─────────────────────────────────────────────────────────────┤
+│  WebSocket Oracles → Multicall Batching → Priority Gas Exec │
+├─────────────────────────────────────────────────────────────┤
+│  PROTOCOLS:  Aave V3 │ Compound V3 │ Morpho │ Radiant       │
+├─────────────────────────────────────────────────────────────┤
+│  CHAINS:     Base │ Polygon │ Arbitrum │ Avalanche          │
+└─────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 💡 Technical Skills
-
-**Smart Contracts**
-- Solidity 0.8.x
-- Flash loan integration (Aave V3)
-- Multi-chain deployment
-- Gas optimization
-
-**Security**
-- Manual code review
-- Foundry testing & PoCs
-- Bug bounty hunting (Code4rena)
-- Common vulnerability patterns
-
-**Backend**
-- Node.js / ethers.js v6
-- Real-time monitoring
-- Mainnet fork testing
-
-**DeFi Protocols**
-- Aave, Compound, Morpho (Lending)
-- Uniswap V2/V3, SushiSwap, Curve (DEX)
-- veToken systems (Solidly forks)
-
-**Infrastructure**
-- Hardhat development suite
-- Multi-chain RPC management
-- Alchemy integration
+## 📁 Structure
+```
+├── contracts/                    # Solidity smart contracts
+│   ├── FlashLoanExecutor.sol     # Aave V3 flash loan wrapper
+│   ├── FlashLiquidator.sol       # Liquidation executor
+│   └── MockUSDC.sol              # Testing token
+├── scripts/                      # Trading bots
+│   ├── eventLiquidatorV3.js      # Multi-protocol bot
+│   ├── flashbotsExecutor.js      # MEV-protected execution
+│   ├── discoverAllBorrowers.js   # Position discovery
+│   └── orderKeeper.js            # GMX/Gains keeper
+├── security/                     # Audit tooling
+├── data/                         # Runtime data
+└── docs/                         # Documentation
+```
 
 ---
 
-## 🗓️ Development Timeline
+## 💡 Skills
+
+**Smart Contracts:** Solidity 0.8.x, Flash loans, Multi-chain deployment
+
+**Backend:** Node.js, ethers.js v6, WebSocket events, Multicall batching, PM2
+
+**DeFi Protocols:** Aave, Compound, Morpho, Radiant, Uniswap, GMX, Chainlink
+
+**MEV:** Priority gas bidding, Flashbots, Sub-10ms reaction
+
+**Security:** Manual auditing, Foundry PoCs, Bug bounty hunting
+
+---
+
+## 🗓️ Progress
 
 | Week | Focus | Status |
 |------|-------|--------|
-| 1 | Environment setup, Hardhat | ✅ Complete |
-| 2 | ERC20 deployment, wallet funding | ✅ Complete |
-| 3 | Flash loans, Uniswap integration | ✅ Complete |
-| 4 | Mainnet fork testing, on-chain quotes | ✅ Complete |
-| 5 | Security auditing, bug bounties | 🔄 In Progress |
-| 6+ | Production deployment | 📋 Planned |
+| 1-2 | Environment, ERC20, Wallets | ✅ |
+| 3-4 | Flash loans, Uniswap, Fork testing | ✅ |
+| 5 | Security, Multi-protocol bots | ✅ |
+| 6+ | VPS deployment, Scaling | 📋 |
 
 ---
 
@@ -113,25 +98,9 @@ Smart contract security analysis and bug bounty hunting.
 ```bash
 npm install
 cp .env.example .env
-# Add your RPC URLs and keys to .env
-npx hardhat compile
-npx hardhat test
+node scripts/discoverAllBorrowers.js
+pm2 start scripts/eventLiquidatorV3.js --name event-liq
 ```
-
-**Run mainnet fork:**
-```bash
-npx hardhat run scripts/forkTestOnchainSwap.js --network fork
-```
-
----
-
-## 🎓 Key Learnings
-
-- Flash loans enable capital-efficient execution
-- Multi-hop arbitrage expands opportunity space
-- Security auditing requires understanding both code AND economics
-- Real CRITICAL bugs (direct fund theft) are rare in audited codebases
-- Most "HIGH" findings are actually MEDIUM or out of scope
 
 ---
 
@@ -141,4 +110,4 @@ GitHub: [@in8forge](https://github.com/in8forge)
 
 ---
 
-*Building DeFi infrastructure* 🚀
+*Building competitive DeFi infrastructure* 🔥
