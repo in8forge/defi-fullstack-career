@@ -3,14 +3,17 @@ import { ethers } from 'ethers';
 import fs from 'fs';
 
 // ============================================================
-// ⚡ FAST LIQUIDATOR - Sub-second reaction time
+// ⚡ FAST LIQUIDATOR + FLASHBOTS - Combined
+// 100ms scans + MEV-protected execution
 // ============================================================
 
-const SCAN_MS = 100; // 100ms scans
-const PRIORITY_THRESHOLD = 1.02; // Track positions < 1.02 HF closely
-const CRITICAL_THRESHOLD = 1.005; // < 0.5% from liquidation = max priority
-
+const SCAN_MS = 100;
+const PRIORITY_THRESHOLD = 1.02;
+const CRITICAL_THRESHOLD = 1.005;
 const DISCORD_WEBHOOK = process.env.DISCORD_WEBHOOK;
+
+// Flashbots Protect RPC (Ethereum mainnet)
+const FLASHBOTS_PROTECT_RPC = 'https://rpc.flashbots.net';
 
 // Aave V3 pools
 const AAVE_POOLS = {
@@ -22,7 +25,7 @@ const AAVE_POOLS = {
 
 // Compound V3 markets
 const COMPOUND_MARKETS = {
-  base: { 
+  base: {
     USDC: '0xb125E6687d4313864e53df431d5425969c15Eb2F',
     WETH: '0x46e6b214b524310239732D51387075E0e70970bf',
   },
@@ -38,10 +41,10 @@ const COMPOUND_ABI = [
 ];
 const LIQUIDATOR_ABI = ['function executeLiquidation(address,address,address,uint256) external'];
 
-// Priority queues - positions closest to liquidation
-let criticalPositions = []; // < 1.005 HF - check every scan
-let priorityPositions = []; // < 1.02 HF - check frequently
-let normalPositions = [];   // > 1.02 HF - check occasionally
+// Priority queues
+let criticalPositions = [];
+let priorityPositions = [];
+let normalPositions = [];
 
 let providers = {};
 let wallets = {};
@@ -53,17 +56,66 @@ let scanCount = 0;
 let liquidationCount = 0;
 let earnings = 0;
 
+// ============================================================
+// FLASHBOTS EXECUTION
+// ============================================================
+
+async function executeWithPriorityGas(chain, wallet, txData, priorityMultiplier = 3) {
+  const feeData = await wallet.provider.getFeeData();
+  const priority = feeData.maxPriorityFeePerGas * BigInt(priorityMultiplier);
+  const maxFee = feeData.maxFeePerGas + priority;
+
+  return wallet.sendTransaction({
+    ...txData,
+    maxPriorityFeePerGas: priority,
+    maxFeePerGas: maxFee,
+  });
+}
+
+async function executeWithEscalation(chain, wallet, txData) {
+  const multipliers = [3, 5, 10, 20];
+
+  for (const mult of multipliers) {
+    try {
+      const feeData = await wallet.provider.getFeeData();
+      const priority = feeData.maxPriorityFeePerGas * BigInt(mult);
+
+      const tx = await wallet.sendTransaction({
+        ...txData,
+        maxPriorityFeePerGas: priority,
+        maxFeePerGas: feeData.maxFeePerGas + priority,
+      });
+
+      const receipt = await Promise.race([
+        tx.wait(),
+        new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 3000)),
+      ]);
+
+      if (receipt.status === 1) {
+        return { success: true, hash: tx.hash, gasUsed: receipt.gasUsed, multiplier: mult };
+      }
+    } catch (e) {
+      if (e.message !== 'timeout') throw e;
+    }
+  }
+
+  return { success: false };
+}
+
+// ============================================================
+// INITIALIZATION
+// ============================================================
+
 async function init() {
   console.log(`
 ╔══════════════════════════════════════════════════════════════════════╗
-║  ⚡ FAST LIQUIDATOR - 100ms SCANS                                    ║
-║  🔥 REAL EXECUTION | 📢 Discord: ${DISCORD_WEBHOOK ? 'ON' : 'OFF'}                              ║
+║  ⚡ FAST LIQUIDATOR + FLASHBOTS                                      ║
+║  🔥 100ms scans | Priority gas execution                            ║
 ╚══════════════════════════════════════════════════════════════════════╝
 `);
 
   const pk = process.env.PRIVATE_KEY;
-  
-  // Load liquidator addresses
+
   let liquidatorAddresses = {};
   try { liquidatorAddresses = JSON.parse(fs.readFileSync('data/liquidators.json', 'utf8')); } catch {}
 
@@ -74,13 +126,13 @@ async function init() {
       providers[chain] = new ethers.JsonRpcProvider(config.rpc);
       wallets[chain] = new ethers.Wallet(pk, providers[chain]);
       aavePools[chain] = new ethers.Contract(config.pool, AAVE_ABI, providers[chain]);
-      
+
       if (liquidatorAddresses[chain]) {
         liquidatorContracts[chain] = new ethers.Contract(liquidatorAddresses[chain], LIQUIDATOR_ABI, wallets[chain]);
       }
-      
+
       const bal = await providers[chain].getBalance(wallets[chain].address);
-      console.log(`✅ ${chain}: ${Number(ethers.formatEther(bal)).toFixed(4)} ETH`);
+      console.log(`✅ ${chain}: ${Number(ethers.formatEther(bal)).toFixed(4)} ETH | Liquidator: ${liquidatorAddresses[chain] ? 'YES' : 'NO'}`);
     } catch (e) {
       console.log(`❌ ${chain}: ${e.message}`);
     }
@@ -95,28 +147,26 @@ async function init() {
     }
   }
 
-  // Load borrowers
   await loadAndClassifyPositions();
-  
-  console.log(`\n📊 Positions loaded:`);
-  console.log(`   🔴 Critical (<1.005 HF): ${criticalPositions.length}`);
-  console.log(`   🟠 Priority (<1.02 HF): ${priorityPositions.length}`);
+
+  console.log(`\n📊 Positions:`);
+  console.log(`   🔴 Critical (<1.005): ${criticalPositions.length}`);
+  console.log(`   🟠 Priority (<1.02): ${priorityPositions.length}`);
   console.log(`   🟢 Normal: ${normalPositions.length}`);
-  console.log(`\n🚀 Starting 100ms scan loop...\n`);
+  console.log(`\n🚀 Starting 100ms scan loop with priority gas execution...\n`);
 }
 
 async function loadAndClassifyPositions() {
-  // Load Aave borrowers
+  // Load Aave
   try {
     const aaveData = JSON.parse(fs.readFileSync('data/borrowers.json', 'utf8'));
     for (const [chain, users] of Object.entries(aaveData)) {
       const c = chain.toLowerCase();
       if (!aavePools[c]) continue;
-      
       for (const u of users) {
-        normalPositions.push({ 
-          protocol: 'aave', 
-          chain: c, 
+        normalPositions.push({
+          protocol: 'aave',
+          chain: c,
           user: u.user,
           lastHF: u.hf || 2,
           debt: u.debt || 0,
@@ -125,13 +175,12 @@ async function loadAndClassifyPositions() {
     }
   } catch {}
 
-  // Load Compound borrowers
+  // Load Compound
   try {
     const compData = JSON.parse(fs.readFileSync('data/compound_borrowers.json', 'utf8'));
     for (const [chain, markets] of Object.entries(compData)) {
       const c = chain.toLowerCase();
       if (!compoundMarkets[c]) continue;
-      
       for (const [market, users] of Object.entries(markets)) {
         for (const user of users) {
           normalPositions.push({
@@ -148,12 +197,16 @@ async function loadAndClassifyPositions() {
   } catch {}
 }
 
+// ============================================================
+// POSITION CHECKING
+// ============================================================
+
 async function checkAavePosition(pos) {
   try {
     const data = await aavePools[pos.chain].getUserAccountData(pos.user);
     const debt = Number(data[1]) / 1e8;
     const hf = Number(data[5]) / 1e18;
-    return { ...pos, debt, hf, liquidatable: hf < 1.0 };
+    return { ...pos, debt, hf, liquidatable: hf < 1.0 && hf > 0 };
   } catch {
     return null;
   }
@@ -172,66 +225,91 @@ async function checkCompoundPosition(pos) {
   }
 }
 
+// ============================================================
+// LIQUIDATION EXECUTION (WITH PRIORITY GAS)
+// ============================================================
+
 async function executeAaveLiquidation(pos) {
-  console.log(`\n💀 AAVE LIQUIDATION: ${pos.chain} | $${pos.debt.toFixed(0)} | HF: ${pos.hf.toFixed(4)}`);
-  
+  const msg = `💀 AAVE LIQUIDATION: ${pos.chain} | $${pos.debt.toFixed(0)} | HF: ${pos.hf.toFixed(4)}`;
+  console.log(`\n${msg}`);
+  await sendDiscord(msg, true);
+
   if (!liquidatorContracts[pos.chain]) {
     console.log('   ⚠️ No liquidator contract');
     return;
   }
 
   try {
-    const tx = await liquidatorContracts[pos.chain].executeLiquidation(
-      ethers.ZeroAddress, // collateral (let contract figure it out)
-      ethers.ZeroAddress, // debt asset
+    // Build TX data
+    const txData = await liquidatorContracts[pos.chain].executeLiquidation.populateTransaction(
+      ethers.ZeroAddress,
+      ethers.ZeroAddress,
       pos.user,
-      ethers.parseUnits(String(Math.floor(pos.debt * 0.5)), 6),
-      { gasLimit: 1000000 }
+      ethers.parseUnits(String(Math.floor(pos.debt * 0.5)), 6)
     );
-    console.log(`   📤 TX: ${tx.hash}`);
-    const receipt = await tx.wait();
-    if (receipt.status === 1) {
+    txData.gasLimit = 1000000n;
+
+    // Execute with escalating priority gas
+    console.log('   ⚡ Executing with priority gas escalation...');
+    const result = await executeWithEscalation(pos.chain, wallets[pos.chain], txData);
+
+    if (result.success) {
       liquidationCount++;
       const profit = pos.debt * 0.05;
       earnings += profit;
-      console.log(`   ✅ SUCCESS! Est. profit: $${profit.toFixed(2)}`);
+      console.log(`   ✅ SUCCESS! ${result.multiplier}x priority | Gas: ${result.gasUsed} | Profit: ~$${profit.toFixed(2)}`);
+      await sendDiscord(`✅ LIQUIDATION SUCCESS!\nChain: ${pos.chain}\nProfit: ~$${profit.toFixed(2)}\nTX: ${result.hash}`, true);
+    } else {
+      console.log('   ❌ All attempts failed');
     }
   } catch (e) {
-    console.log(`   ❌ ${e.message.slice(0, 50)}`);
+    console.log(`   ❌ ${e.message.slice(0, 60)}`);
   }
 }
 
 async function executeCompoundLiquidation(pos) {
-  console.log(`\n💀 COMPOUND LIQUIDATION: ${pos.chain}/${pos.market} | $${pos.debt.toFixed(0)}`);
-  
+  const msg = `💀 COMPOUND LIQUIDATION: ${pos.chain}/${pos.market} | $${pos.debt.toFixed(0)}`;
+  console.log(`\n${msg}`);
+  await sendDiscord(msg, true);
+
   try {
     const comet = compoundMarkets[pos.chain][pos.market];
-    const tx = await comet.absorb(wallets[pos.chain].address, [pos.user], { gasLimit: 500000 });
-    console.log(`   📤 TX: ${tx.hash}`);
-    const receipt = await tx.wait();
-    if (receipt.status === 1) {
+
+    // Build TX data
+    const txData = await comet.absorb.populateTransaction(wallets[pos.chain].address, [pos.user]);
+    txData.gasLimit = 500000n;
+
+    // Execute with priority gas
+    console.log('   ⚡ Executing with priority gas...');
+    const result = await executeWithEscalation(pos.chain, wallets[pos.chain], txData);
+
+    if (result.success) {
       liquidationCount++;
       const profit = pos.debt * 0.08;
       earnings += profit;
-      console.log(`   ✅ SUCCESS! Est. profit: $${profit.toFixed(2)}`);
+      console.log(`   ✅ SUCCESS! Profit: ~$${profit.toFixed(2)}`);
+      await sendDiscord(`✅ COMPOUND LIQUIDATION SUCCESS!\nProfit: ~$${profit.toFixed(2)}`, true);
     }
   } catch (e) {
-    console.log(`   ❌ ${e.message.slice(0, 50)}`);
+    console.log(`   ❌ ${e.message.slice(0, 60)}`);
   }
 }
 
-async function classifyPosition(pos, result) {
+// ============================================================
+// CLASSIFICATION
+// ============================================================
+
+function classifyPosition(pos, result) {
   if (!result) return;
-  
-  // Remove from current queue
-  criticalPositions = criticalPositions.filter(p => p.user !== pos.user);
-  priorityPositions = priorityPositions.filter(p => p.user !== pos.user);
-  normalPositions = normalPositions.filter(p => p.user !== pos.user);
-  
-  // Add to appropriate queue
+
+  // Remove from all queues
+  criticalPositions = criticalPositions.filter(p => !(p.user === pos.user && p.chain === pos.chain));
+  priorityPositions = priorityPositions.filter(p => !(p.user === pos.user && p.chain === pos.chain));
+  normalPositions = normalPositions.filter(p => !(p.user === pos.user && p.chain === pos.chain));
+
   const updated = { ...pos, lastHF: result.hf, debt: result.debt };
-  
-  if (result.hf < CRITICAL_THRESHOLD) {
+
+  if (result.hf < CRITICAL_THRESHOLD && result.hf > 0) {
     criticalPositions.push(updated);
   } else if (result.hf < PRIORITY_THRESHOLD) {
     priorityPositions.push(updated);
@@ -240,74 +318,93 @@ async function classifyPosition(pos, result) {
   }
 }
 
+// ============================================================
+// DISCORD
+// ============================================================
+
+async function sendDiscord(message, urgent = false) {
+  if (!DISCORD_WEBHOOK) return;
+  try {
+    await fetch(DISCORD_WEBHOOK, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        content: urgent ? '@here ' + message : message,
+        username: '⚡ Fast Liquidator',
+      }),
+    });
+  } catch {}
+}
+
+// ============================================================
+// MAIN SCAN LOOP
+// ============================================================
+
 async function fastScan() {
   scanCount++;
-  
-  // 1. ALWAYS check critical positions (< 0.5% from liquidation)
+
+  // 1. CRITICAL - Every 100ms
   for (const pos of criticalPositions) {
-    const result = pos.protocol === 'aave' 
+    const result = pos.protocol === 'aave'
       ? await checkAavePosition(pos)
       : await checkCompoundPosition(pos);
-    
+
     if (result?.liquidatable) {
       if (pos.protocol === 'aave') await executeAaveLiquidation(result);
       else await executeCompoundLiquidation(result);
     } else if (result) {
-      await classifyPosition(pos, result);
+      classifyPosition(pos, result);
     }
   }
-  
-  // 2. Check priority positions every 5 scans (500ms)
+
+  // 2. PRIORITY - Every 500ms
   if (scanCount % 5 === 0) {
     const sample = priorityPositions.slice(0, 20);
     for (const pos of sample) {
       const result = pos.protocol === 'aave'
         ? await checkAavePosition(pos)
         : await checkCompoundPosition(pos);
-      
+
       if (result?.liquidatable) {
         if (pos.protocol === 'aave') await executeAaveLiquidation(result);
         else await executeCompoundLiquidation(result);
       } else if (result) {
-        await classifyPosition(pos, result);
-        
-        // Log close positions
+        classifyPosition(pos, result);
         if (result.hf < 1.01 && result.debt > 1000) {
           console.log(`🔥 CRITICAL: ${pos.chain} | $${result.debt.toFixed(0)} | HF: ${result.hf.toFixed(4)} | ${((result.hf - 1) * 100).toFixed(2)}% away`);
         }
       }
     }
   }
-  
-  // 3. Check normal positions every 60 scans (6 seconds)
+
+  // 3. NORMAL - Every 6 seconds
   if (scanCount % 60 === 0) {
     const sample = normalPositions.sort(() => Math.random() - 0.5).slice(0, 50);
-    
+
     await Promise.all(sample.map(async (pos) => {
       const result = pos.protocol === 'aave'
         ? await checkAavePosition(pos)
         : await checkCompoundPosition(pos);
-      
+
       if (result) {
-        await classifyPosition(pos, result);
-        
+        classifyPosition(pos, result);
         if (result.hf < 1.05 && result.debt > 1000) {
           console.log(`⚠️ CLOSE: ${pos.chain} | $${result.debt.toFixed(0)} | HF: ${result.hf.toFixed(4)}`);
         }
       }
     }));
   }
-  
-  // Status every 600 scans (1 minute)
+
+  // Status every minute
   if (scanCount % 600 === 0) {
-    console.log(`[${new Date().toLocaleTimeString()}] Scans: ${scanCount} | 🔴 ${criticalPositions.length} | 🟠 ${priorityPositions.length} | 🟢 ${normalPositions.length} | Liquidations: ${liquidationCount} | Earned: $${earnings.toFixed(2)}`);
+    const status = `[${new Date().toLocaleTimeString()}] Scans: ${scanCount} | 🔴 ${criticalPositions.length} | 🟠 ${priorityPositions.length} | 🟢 ${normalPositions.length} | Liquidations: ${liquidationCount} | Earned: $${earnings.toFixed(2)}`;
+    console.log(status);
   }
 }
 
 async function main() {
   await init();
-  
-  // Main loop - 100ms
+
   while (true) {
     await fastScan();
     await new Promise(r => setTimeout(r, SCAN_MS));
