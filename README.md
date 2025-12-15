@@ -1,113 +1,89 @@
-# 🚀 DeFi Trading System - Full Stack Portfolio
+# 🚀 DeFi Liquidation Bot - Production System
 
-> **Production-grade automated trading infrastructure**
+> **24/7 automated liquidation infrastructure running on VPS**
 
 [![Status](https://img.shields.io/badge/Status-LIVE-brightgreen)]()
-[![Week](https://img.shields.io/badge/Week-5%20Complete-orange)]()
 [![Protocols](https://img.shields.io/badge/Protocols-4-purple)]()
+[![Chains](https://img.shields.io/badge/Chains-4-blue)]()
 
 ---
 
-## 👋 About
+## ⚡ Live System
 
-Production DeFi infrastructure built from scratch - multi-protocol liquidation bots, automated trading systems, and security auditing.
-
----
-
-## 🤖 Live Systems
-
-### ⚡ Event-Based Liquidator V3
-**Multi-protocol liquidation bot with sub-10ms reaction time**
+**Event-Based Liquidator V3** - Multi-protocol bot with parallel execution
 
 | Feature | Implementation |
 |---------|----------------|
 | Protocols | Aave V3, Compound V3, Morpho Blue, Radiant V2 |
 | Chains | Base, Polygon, Arbitrum, Avalanche |
-| Detection | WebSocket oracle subscriptions |
-| Efficiency | Multicall batching (100+ positions/call) |
-| Execution | Priority gas escalation (5x-20x) |
-
-### 📋 Order Keeper
-**GMX & Gains Network order execution**
-
-- Monitors pending limit orders
-- Executes when price conditions met
-- Earns keeper fees
+| Detection | WebSocket oracle subscriptions (<10ms) |
+| Batching | Multicall (100+ positions per RPC call) |
+| Execution | Parallel + Priority gas (5x) |
+| Uptime | 24/7 VPS (New Jersey) |
 
 ---
 
 ## 🏗️ Architecture
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                    EVENT LIQUIDATOR V3                       │
-├─────────────────────────────────────────────────────────────┤
-│  WebSocket Oracles → Multicall Batching → Priority Gas Exec │
-├─────────────────────────────────────────────────────────────┤
-│  PROTOCOLS:  Aave V3 │ Compound V3 │ Morpho │ Radiant       │
-├─────────────────────────────────────────────────────────────┤
-│  CHAINS:     Base │ Polygon │ Arbitrum │ Avalanche          │
-└─────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│                 EVENT LIQUIDATOR V3                              │
+├─────────────────────────────────────────────────────────────────┤
+│  Chainlink WebSocket → Multicall Check → Parallel Execution     │
+├─────────────────────────────────────────────────────────────────┤
+│  PROTOCOLS: Aave V3 │ Compound V3 │ Morpho Blue │ Radiant V2    │
+├─────────────────────────────────────────────────────────────────┤
+│  CHAINS: Base │ Polygon │ Arbitrum │ Avalanche                  │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
 ## 📁 Structure
 ```
-├── contracts/                    # Solidity smart contracts
-│   ├── FlashLoanExecutor.sol     # Aave V3 flash loan wrapper
-│   ├── FlashLiquidator.sol       # Liquidation executor
-│   └── MockUSDC.sol              # Testing token
-├── scripts/                      # Trading bots
-│   ├── eventLiquidatorV3.js      # Multi-protocol bot
-│   ├── flashbotsExecutor.js      # MEV-protected execution
+├── scripts/
+│   ├── eventLiquidatorV3.js      # Main bot (parallel execution)
 │   ├── discoverAllBorrowers.js   # Position discovery
-│   └── orderKeeper.js            # GMX/Gains keeper
-├── security/                     # Audit tooling
-├── data/                         # Runtime data
-└── docs/                         # Documentation
+│   ├── orderKeeper.js            # GMX/Gains keeper
+│   └── flashbotsExecutor.js      # MEV-protected execution
+├── contracts/
+│   ├── FlashLoanExecutor.sol     # Aave V3 flash loans
+│   └── FlashLiquidator.sol       # Liquidation executor
+└── data/
+    ├── borrowers.json            # Aave positions
+    └── compound_borrowers.json   # Compound positions
 ```
 
 ---
 
-## 💡 Skills
+## 💡 Technical Stack
 
-**Smart Contracts:** Solidity 0.8.x, Flash loans, Multi-chain deployment
+**Execution**
+- Parallel liquidation (multiple positions simultaneously)
+- Priority gas escalation (5x-20x)
+- Multicall3 batching
 
-**Backend:** Node.js, ethers.js v6, WebSocket events, Multicall batching, PM2
+**Detection**
+- WebSocket price feed subscriptions
+- <10ms reaction to oracle updates
+- Background scan fallback (30s)
 
-**DeFi Protocols:** Aave, Compound, Morpho, Radiant, Uniswap, GMX, Chainlink
-
-**MEV:** Priority gas bidding, Flashbots, Sub-10ms reaction
-
-**Security:** Manual auditing, Foundry PoCs, Bug bounty hunting
+**Infrastructure**
+- VPS deployment (low latency)
+- PM2 process management
+- Auto-restart on reboot
+- Weekly borrower discovery cron
 
 ---
 
-## 🗓️ Progress
+## 🗓️ Development
 
 | Week | Focus | Status |
 |------|-------|--------|
 | 1-2 | Environment, ERC20, Wallets | ✅ |
 | 3-4 | Flash loans, Uniswap, Fork testing | ✅ |
-| 5 | Security, Multi-protocol bots | ✅ |
-| 6+ | VPS deployment, Scaling | 📋 |
+| 5 | Multi-protocol bots, VPS deployment | ✅ |
+| 6+ | Scaling, Additional protocols | 📋 |
 
 ---
 
-## 🚀 Quick Start
-```bash
-npm install
-cp .env.example .env
-node scripts/discoverAllBorrowers.js
-pm2 start scripts/eventLiquidatorV3.js --name event-liq
-```
-
----
-
-## 📫 Contact
-
-GitHub: [@in8forge](https://github.com/in8forge)
-
----
-
-*Building competitive DeFi infrastructure* 🔥
+*Production DeFi infrastructure* 🔥
