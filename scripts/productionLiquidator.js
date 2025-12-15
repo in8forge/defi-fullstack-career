@@ -180,7 +180,7 @@ async function executeLiquidation(pos) {
 async function scan() {
   scanCount++;
   
-  const sample = borrowers.sort(() => Math.random() - 0.5).slice(0, 10);
+  const sample = borrowers.sort(() => Math.random() - 0.5).slice(0, 50);
   
   for (const b of sample) {
     const pos = await checkPosition(b.chain, b.user);
