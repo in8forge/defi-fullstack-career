@@ -27,3 +27,4 @@ contracts/Contracts/
 .env.networks
 multi_hop/.env
 multi_hop/node_modules/
+multi_hop/node_modules/
