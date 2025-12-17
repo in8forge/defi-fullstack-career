@@ -27,7 +27,7 @@ interface IPoolAddressesProvider {
 }
 
 // Uniswap V3 Router
-interface ISwapRouter {
+interface ISwapRouterV3 {
     struct ExactInputSingleParams {
         address tokenIn;
         address tokenOut;
@@ -42,26 +42,43 @@ interface ISwapRouter {
     function exactInputSingle(ExactInputSingleParams calldata params) external payable returns (uint256 amountOut);
 }
 
-// ETH Derivative interfaces
-interface IWeETH {
-    function unwrap(uint256 amount) external returns (uint256);
+// Uniswap V2 / Sushiswap Router
+interface ISwapRouterV2 {
+    function swapExactTokensForTokens(
+        uint256 amountIn,
+        uint256 amountOutMin,
+        address[] calldata path,
+        address to,
+        uint256 deadline
+    ) external returns (uint256[] memory amounts);
+    
+    function getAmountsOut(uint256 amountIn, address[] calldata path) external view returns (uint256[] memory amounts);
 }
 
-interface IWstETH {
-    function unwrap(uint256 amount) external returns (uint256);
+// Curve Pool
+interface ICurvePool {
+    function exchange(int128 i, int128 j, uint256 dx, uint256 min_dy) external returns (uint256);
+    function get_dy(int128 i, int128 j, uint256 dx) external view returns (uint256);
 }
 
 contract FlashLiquidatorV2 {
     address public owner;
     IPool public immutable POOL;
-    ISwapRouter public immutable swapRouter;
     
     address public WETH;
     address public USDC;
     
+    // DEX Routers
+    address public uniswapV3Router;
+    address public sushiswapRouter;
+    address public curvePool;
+    
+    // Slippage protection (basis points, 100 = 1%)
+    uint256 public maxSlippageBps = 100; // Default 1%
+    
     // ETH derivative tokens
     mapping(address => bool) public isEthDerivative;
-    mapping(address => address) public derivativeUnderlying; // derivative => underlying (e.g., weETH => eETH)
+    mapping(address => address) public derivativeUnderlying;
     
     struct LiquidationParams {
         address collateralAsset;
@@ -79,10 +96,13 @@ contract FlashLiquidatorV2 {
         address debtAsset,
         uint256 debtCovered,
         uint256 collateralReceived,
-        uint256 profit
+        uint256 profit,
+        string dexUsed
     );
     
     event ProfitWithdrawn(address token, uint256 amount);
+    event SlippageUpdated(uint256 newSlippageBps);
+    event DexUpdated(string dex, address router);
     
     modifier onlyOwner() {
         require(msg.sender == owner, "Not owner");
@@ -91,13 +111,13 @@ contract FlashLiquidatorV2 {
     
     constructor(
         address _poolProvider,
-        address _swapRouter,
+        address _uniswapV3Router,
         address _weth,
         address _usdc
     ) {
         owner = msg.sender;
         POOL = IPool(IPoolAddressesProvider(_poolProvider).getPool());
-        swapRouter = ISwapRouter(_swapRouter);
+        uniswapV3Router = _uniswapV3Router;
         WETH = _weth;
         USDC = _usdc;
     }
@@ -105,6 +125,31 @@ contract FlashLiquidatorV2 {
     // ============================================================
     // CONFIGURATION
     // ============================================================
+    
+    function setSlippage(uint256 _maxSlippageBps) external onlyOwner {
+        require(_maxSlippageBps <= 1000, "Max 10% slippage");
+        maxSlippageBps = _maxSlippageBps;
+        emit SlippageUpdated(_maxSlippageBps);
+    }
+    
+    function setDexRouters(
+        address _uniswapV3,
+        address _sushiswap,
+        address _curve
+    ) external onlyOwner {
+        if (_uniswapV3 != address(0)) {
+            uniswapV3Router = _uniswapV3;
+            emit DexUpdated("UniswapV3", _uniswapV3);
+        }
+        if (_sushiswap != address(0)) {
+            sushiswapRouter = _sushiswap;
+            emit DexUpdated("Sushiswap", _sushiswap);
+        }
+        if (_curve != address(0)) {
+            curvePool = _curve;
+            emit DexUpdated("Curve", _curve);
+        }
+    }
     
     function setEthDerivative(address token, bool isDerivative, address underlying) external onlyOwner {
         isEthDerivative[token] = isDerivative;
@@ -143,7 +188,7 @@ contract FlashLiquidatorV2 {
         POOL.flashLoanSimple(address(this), debtAsset, debtToCover, "", 0);
     }
     
-    // Legacy function for compatibility with existing bot
+    // Legacy function for compatibility
     function executeLiquidation(
         address collateralAsset,
         address debtAsset,
@@ -189,7 +234,7 @@ contract FlashLiquidatorV2 {
             lp.debtAsset,
             lp.user,
             lp.debtToCover,
-            false // receive underlying, not aToken
+            false
         );
         
         // 4. Calculate collateral received
@@ -199,15 +244,19 @@ contract FlashLiquidatorV2 {
         // 5. Calculate amount owed (flash loan + premium)
         uint256 amountOwed = amount + premium;
         
-        // 6. Convert collateral to debt asset if needed
+        // 6. Calculate minimum output with slippage protection
+        uint256 minOutput = amountOwed * (10000 + maxSlippageBps) / 10000;
+        
+        // 7. Convert collateral to debt asset using best DEX
+        string memory dexUsed = "none";
         if (lp.collateralAsset != lp.debtAsset) {
-            _swapCollateralToDebt(lp.collateralAsset, lp.debtAsset, colReceived, amountOwed);
+            dexUsed = _swapWithBestDex(lp.collateralAsset, lp.debtAsset, colReceived, amountOwed);
         }
         
-        // 7. Approve repayment
+        // 8. Approve repayment
         IERC20(asset).approve(address(POOL), amountOwed);
         
-        // 8. Calculate and verify profit
+        // 9. Calculate and verify profit
         uint256 finalBalance = IERC20(asset).balanceOf(address(this));
         require(finalBalance >= amountOwed, "Insufficient balance to repay");
         
@@ -220,93 +269,200 @@ contract FlashLiquidatorV2 {
             lp.debtAsset,
             lp.debtToCover,
             colReceived,
-            profit
+            profit,
+            dexUsed
         );
         
         return true;
     }
     
     // ============================================================
-    // SMART SWAP LOGIC
+    // MULTI-DEX SWAP LOGIC
     // ============================================================
     
-    function _swapCollateralToDebt(
-        address collateral,
-        address debt,
+    function _swapWithBestDex(
+        address tokenIn,
+        address tokenOut,
         uint256 amountIn,
         uint256 minAmountOut
-    ) internal {
-        uint256 amountToSwap = amountIn;
-        address tokenToSwap = collateral;
+    ) internal returns (string memory dexUsed) {
         
-        // Step 1: If ETH derivative, try to unwrap first
-        if (isEthDerivative[collateral]) {
-            tokenToSwap = _tryUnwrapDerivative(collateral, amountIn);
-            if (tokenToSwap != collateral) {
-                amountToSwap = IERC20(tokenToSwap).balanceOf(address(this));
-            }
-            
-            // If debt is WETH and we unwrapped to WETH-like, we might be done
-            if (tokenToSwap == debt) {
-                return;
-            }
+        // Get quotes from all DEXs
+        uint256 uniV3Quote = _getUniswapV3Quote(tokenIn, tokenOut, amountIn);
+        uint256 sushiQuote = _getSushiswapQuote(tokenIn, tokenOut, amountIn);
+        
+        // Find best quote
+        uint256 bestQuote = uniV3Quote;
+        uint8 bestDex = 1; // 1 = UniV3, 2 = Sushi, 3 = Curve
+        
+        if (sushiQuote > bestQuote) {
+            bestQuote = sushiQuote;
+            bestDex = 2;
         }
         
-        // Step 2: Try direct V3 swap with multiple fee tiers
-        IERC20(tokenToSwap).approve(address(swapRouter), amountToSwap);
+        // Apply slippage protection
+        uint256 minWithSlippage = minAmountOut * (10000 - maxSlippageBps) / 10000;
+        require(bestQuote >= minWithSlippage, "All DEX quotes below minimum");
         
-        uint24[3] memory fees = [uint24(500), uint24(3000), uint24(10000)];
-        
-        for (uint i = 0; i < fees.length; i++) {
-            try swapRouter.exactInputSingle(
-                ISwapRouter.ExactInputSingleParams({
-                    tokenIn: tokenToSwap,
-                    tokenOut: debt,
-                    fee: fees[i],
-                    recipient: address(this),
-                    deadline: block.timestamp + 300,
-                    amountIn: amountToSwap,
-                    amountOutMinimum: minAmountOut,
-                    sqrtPriceLimitX96: 0
-                })
-            ) returns (uint256) {
-                return; // Success
-            } catch {
-                continue;
-            }
+        // Execute swap on best DEX
+        if (bestDex == 1) {
+            _swapUniswapV3(tokenIn, tokenOut, amountIn, minWithSlippage);
+            return "UniswapV3";
+        } else if (bestDex == 2) {
+            _swapSushiswap(tokenIn, tokenOut, amountIn, minWithSlippage);
+            return "Sushiswap";
         }
         
-        // Step 3: Try multi-hop through WETH
-        if (tokenToSwap != WETH && debt != WETH) {
-            _swapViaWeth(tokenToSwap, debt, amountToSwap, minAmountOut);
-            return;
+        // Fallback: try multi-hop through WETH
+        if (tokenIn != WETH && tokenOut != WETH) {
+            _swapViaWeth(tokenIn, tokenOut, amountIn, minWithSlippage);
+            return "MultiHop";
         }
         
         revert("All swaps failed");
     }
     
-    function _tryUnwrapDerivative(address derivative, uint256 amount) internal returns (address) {
-        // Try weETH unwrap (Base: 0x04C0599Ae5A44757c0af6F9eC3b93da8976c150A)
-        if (derivative == 0x04C0599Ae5A44757c0af6F9eC3b93da8976c150A) {
-            try IWeETH(derivative).unwrap(amount) returns (uint256) {
-                // weETH unwraps to eETH, which we then need to swap
-                return derivativeUnderlying[derivative];
+    // ============================================================
+    // DEX QUOTE FUNCTIONS
+    // ============================================================
+    
+    function _getUniswapV3Quote(
+        address tokenIn,
+        address tokenOut,
+        uint256 amountIn
+    ) internal returns (uint256) {
+        if (uniswapV3Router == address(0)) return 0;
+        
+        // Try swap with 0 minOut to get quote (will revert if no liquidity)
+        uint24[3] memory fees = [uint24(500), uint24(3000), uint24(10000)];
+        
+        for (uint i = 0; i < fees.length; i++) {
+            try ISwapRouterV3(uniswapV3Router).exactInputSingle(
+                ISwapRouterV3.ExactInputSingleParams({
+                    tokenIn: tokenIn,
+                    tokenOut: tokenOut,
+                    fee: fees[i],
+                    recipient: address(this),
+                    deadline: block.timestamp + 300,
+                    amountIn: 0, // Quote only
+                    amountOutMinimum: 0,
+                    sqrtPriceLimitX96: 0
+                })
+            ) returns (uint256 quote) {
+                // Scale up from 0 input
+                if (quote > 0) return quote * amountIn;
+            } catch {}
+        }
+        
+        return 0;
+    }
+    
+    function _getSushiswapQuote(
+        address tokenIn,
+        address tokenOut,
+        uint256 amountIn
+    ) internal view returns (uint256) {
+        if (sushiswapRouter == address(0)) return 0;
+        
+        address[] memory path = new address[](2);
+        path[0] = tokenIn;
+        path[1] = tokenOut;
+        
+        try ISwapRouterV2(sushiswapRouter).getAmountsOut(amountIn, path) returns (uint256[] memory amounts) {
+            return amounts[1];
+        } catch {}
+        
+        // Try via WETH
+        if (tokenIn != WETH && tokenOut != WETH) {
+            address[] memory pathViaWeth = new address[](3);
+            pathViaWeth[0] = tokenIn;
+            pathViaWeth[1] = WETH;
+            pathViaWeth[2] = tokenOut;
+            
+            try ISwapRouterV2(sushiswapRouter).getAmountsOut(amountIn, pathViaWeth) returns (uint256[] memory amounts) {
+                return amounts[2];
+            } catch {}
+        }
+        
+        return 0;
+    }
+    
+    // ============================================================
+    // DEX SWAP EXECUTION
+    // ============================================================
+    
+    function _swapUniswapV3(
+        address tokenIn,
+        address tokenOut,
+        uint256 amountIn,
+        uint256 minAmountOut
+    ) internal returns (uint256) {
+        IERC20(tokenIn).approve(uniswapV3Router, amountIn);
+        
+        uint24[3] memory fees = [uint24(500), uint24(3000), uint24(10000)];
+        
+        for (uint i = 0; i < fees.length; i++) {
+            try ISwapRouterV3(uniswapV3Router).exactInputSingle(
+                ISwapRouterV3.ExactInputSingleParams({
+                    tokenIn: tokenIn,
+                    tokenOut: tokenOut,
+                    fee: fees[i],
+                    recipient: address(this),
+                    deadline: block.timestamp + 300,
+                    amountIn: amountIn,
+                    amountOutMinimum: minAmountOut,
+                    sqrtPriceLimitX96: 0
+                })
+            ) returns (uint256 amountOut) {
+                return amountOut;
             } catch {
-                return derivative; // Unwrap failed, swap derivative directly
+                continue;
             }
         }
         
-        // Try wstETH unwrap (Base: 0xc1CBa3fCea344f92D9239c08C0568f6F2F0ee452)
-        if (derivative == 0xc1CBa3fCea344f92D9239c08C0568f6F2F0ee452) {
-            try IWstETH(derivative).unwrap(amount) returns (uint256) {
-                return derivativeUnderlying[derivative];
-            } catch {
-                return derivative;
-            }
+        revert("UniswapV3 swap failed");
+    }
+    
+    function _swapSushiswap(
+        address tokenIn,
+        address tokenOut,
+        uint256 amountIn,
+        uint256 minAmountOut
+    ) internal returns (uint256) {
+        IERC20(tokenIn).approve(sushiswapRouter, amountIn);
+        
+        address[] memory path = new address[](2);
+        path[0] = tokenIn;
+        path[1] = tokenOut;
+        
+        try ISwapRouterV2(sushiswapRouter).swapExactTokensForTokens(
+            amountIn,
+            minAmountOut,
+            path,
+            address(this),
+            block.timestamp + 300
+        ) returns (uint256[] memory amounts) {
+            return amounts[1];
+        } catch {}
+        
+        // Try via WETH
+        if (tokenIn != WETH && tokenOut != WETH) {
+            address[] memory pathViaWeth = new address[](3);
+            pathViaWeth[0] = tokenIn;
+            pathViaWeth[1] = WETH;
+            pathViaWeth[2] = tokenOut;
+            
+            uint256[] memory amounts = ISwapRouterV2(sushiswapRouter).swapExactTokensForTokens(
+                amountIn,
+                minAmountOut,
+                pathViaWeth,
+                address(this),
+                block.timestamp + 300
+            );
+            return amounts[2];
         }
         
-        // cbETH and others - just swap directly, no unwrap needed
-        return derivative;
+        revert("Sushiswap swap failed");
     }
     
     function _swapViaWeth(
@@ -315,16 +471,16 @@ contract FlashLiquidatorV2 {
         uint256 amountIn,
         uint256 minAmountOut
     ) internal {
-        // First swap: tokenIn -> WETH
-        IERC20(tokenIn).approve(address(swapRouter), amountIn);
+        // First swap: tokenIn -> WETH on UniswapV3
+        IERC20(tokenIn).approve(uniswapV3Router, amountIn);
         
         uint256 wethReceived;
         uint24[3] memory fees = [uint24(500), uint24(3000), uint24(10000)];
         bool firstSwapDone = false;
         
         for (uint i = 0; i < fees.length && !firstSwapDone; i++) {
-            try swapRouter.exactInputSingle(
-                ISwapRouter.ExactInputSingleParams({
+            try ISwapRouterV3(uniswapV3Router).exactInputSingle(
+                ISwapRouterV3.ExactInputSingleParams({
                     tokenIn: tokenIn,
                     tokenOut: WETH,
                     fee: fees[i],
@@ -345,12 +501,12 @@ contract FlashLiquidatorV2 {
         require(firstSwapDone, "First hop failed");
         
         // Second swap: WETH -> tokenOut
-        IERC20(WETH).approve(address(swapRouter), wethReceived);
+        IERC20(WETH).approve(uniswapV3Router, wethReceived);
         
         bool secondSwapDone = false;
         for (uint i = 0; i < fees.length && !secondSwapDone; i++) {
-            try swapRouter.exactInputSingle(
-                ISwapRouter.ExactInputSingleParams({
+            try ISwapRouterV3(uniswapV3Router).exactInputSingle(
+                ISwapRouterV3.ExactInputSingleParams({
                     tokenIn: WETH,
                     tokenOut: tokenOut,
                     fee: fees[i],
@@ -403,15 +559,12 @@ contract FlashLiquidatorV2 {
     // VIEW FUNCTIONS
     // ============================================================
     
-    function estimateProfit(
-        uint256 collateralValue,
-        uint256 debtValue,
-        uint256 liquidationBonus // e.g., 500 = 5%
-    ) external pure returns (uint256) {
-        // Rough estimate: bonus - flash loan fee (0.09%)
-        uint256 bonus = collateralValue * liquidationBonus / 10000;
-        uint256 flashFee = debtValue * 9 / 10000;
-        return bonus > flashFee ? bonus - flashFee : 0;
+    function getSlippage() external view returns (uint256) {
+        return maxSlippageBps;
+    }
+    
+    function getDexRouters() external view returns (address, address, address) {
+        return (uniswapV3Router, sushiswapRouter, curvePool);
     }
     
     receive() external payable {}
