@@ -3,7 +3,7 @@ import { ethers } from 'ethers';
 import fs from 'fs';
 
 // ============================================================
-// ⚡ EVENT LIQUIDATOR V3 - Smart Collateral Detection
+// ⚡ EVENT LIQUIDATOR V3 - Smart Collateral Detection + Auto-Withdraw
 // ============================================================
 
 const DISCORD_WEBHOOK = process.env.DISCORD_WEBHOOK;
@@ -16,7 +16,6 @@ const AAVE_POOLS = {
   avalanche: { pool: '0x794a61358D6845594F94dc1DB02A252b5b4814aD', rpc: process.env.AVALANCHE_RPC_URL, ws: process.env.AVALANCHE_WS_URL },
 };
 
-// All supported assets per chain with aToken and debtToken addresses
 const CHAIN_ASSETS = {
   base: [
     { symbol: 'WETH', token: '0x4200000000000000000000000000000000000006', aToken: '0xD4a0e0b9149BCee3C920d2E00b5dE09138fd8bb7', debtToken: '0x24e6e0795b3c7c71D965fCc4f371803d1c1DcA1E', decimals: 18 },
@@ -49,6 +48,14 @@ const CHAIN_ASSETS = {
   ],
 };
 
+// Common tokens per chain for auto-withdraw
+const PROFIT_TOKENS = {
+  base: ['0x4200000000000000000000000000000000000006', '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913'], // WETH, USDC
+  polygon: ['0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619', '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174'],
+  arbitrum: ['0x82aF49447D8a07e3bd95BD0d56f35241523fBab1', '0xaf88d065e77c8cC2239327C5EDb3A432268e5831'],
+  avalanche: ['0x49D5c2BdFfac6CE2BFdB6640F4F80f226bc10bAB', '0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E'],
+};
+
 const COMPOUND_MARKETS = {
   base: { USDC: '0xb125E6687d4313864e53df431d5425969c15Eb2F', WETH: '0x46e6b214b524310239732D51387075E0e70970bf' },
   arbitrum: { USDC: '0xA5EDBDD9646f8dFF606d7448e414884C7d905dCA' },
@@ -67,8 +74,13 @@ const MULTICALL_ABI = ['function aggregate3(tuple(address target, bool allowFail
 const CHAINLINK_ABI = ['event AnswerUpdated(int256 indexed current, uint256 indexed roundId, uint256 updatedAt)', 'function latestRoundData() view returns (uint80, int256, uint256, uint256, uint80)'];
 const AAVE_ABI = ['function getUserAccountData(address) view returns (uint256,uint256,uint256,uint256,uint256,uint256)'];
 const COMPOUND_ABI = ['function isLiquidatable(address) view returns (bool)', 'function borrowBalanceOf(address) view returns (uint256)', 'function absorb(address, address[])'];
-const FLASH_LIQUIDATOR_ABI = ['function executeLiquidation(address collateralAsset, address debtAsset, address user, uint256 debtToCover) external'];
-const ERC20_ABI = ['function balanceOf(address) view returns (uint256)'];
+const FLASH_LIQUIDATOR_ABI = [
+  'function executeLiquidation(address collateralAsset, address debtAsset, address user, uint256 debtToCover) external',
+  'function withdrawProfit(address token) external',
+  'function withdrawAllProfits(address[] tokens) external',
+  'function withdrawETH() external',
+];
+const ERC20_ABI = ['function balanceOf(address) view returns (uint256)', 'function symbol() view returns (string)', 'function decimals() view returns (uint8)'];
 
 // State
 let providers = {};
@@ -87,8 +99,8 @@ let stats = { events: 0, checks: 0, liquidations: 0, earnings: 0 };
 async function init() {
   console.log(`
 ╔══════════════════════════════════════════════════════════════════════╗
-║  ⚡ EVENT LIQUIDATOR V3 - Smart Collateral Detection                 ║
-║  🎯 Detects actual collateral/debt assets per position               ║
+║  ⚡ EVENT LIQUIDATOR V3 - Auto-Withdraw Profits                      ║
+║  🎯 Detects collateral/debt | Profits → Your Wallet                  ║
 ╚══════════════════════════════════════════════════════════════════════╝
 `);
 
@@ -152,7 +164,8 @@ function printStats() {
   const aaveTotal = Object.values(borrowers.aave).reduce((s, a) => s + (a?.length || 0), 0);
   const compTotal = Object.values(borrowers.compound).reduce((s, c) => s + Object.values(c).reduce((x, y) => x + y.length, 0), 0);
   console.log(`\n📊 POSITIONS: ${aaveTotal} Aave + ${compTotal} Compound = ${aaveTotal + compTotal} total`);
-  console.log(`⚡ FLASH LOANS: ${Object.keys(flashLiquidators).join(', ') || 'None'}\n`);
+  console.log(`⚡ FLASH LOANS: ${Object.keys(flashLiquidators).join(', ') || 'None'}`);
+  console.log(`💰 AUTO-WITHDRAW: Enabled - profits go to your wallet\n`);
 }
 
 // ============================================================
@@ -165,7 +178,6 @@ async function detectCollateralAndDebt(chain, user) {
   
   const iface = new ethers.Interface(ERC20_ABI);
   
-  // Build multicall for all aTokens and debtTokens
   const calls = [];
   for (const asset of assets) {
     calls.push({ target: asset.aToken, allowFailure: true, callData: iface.encodeFunctionData('balanceOf', [user]) });
@@ -202,6 +214,50 @@ async function detectCollateralAndDebt(chain, user) {
     console.log(`   ❌ Detection error: ${e.message}`);
     return { collateral: null, debt: null };
   }
+}
+
+// ============================================================
+// AUTO-WITHDRAW PROFITS
+// ============================================================
+
+async function withdrawProfits(chain) {
+  if (!flashLiquidators[chain]) return;
+  
+  const tokens = PROFIT_TOKENS[chain] || [];
+  
+  for (const token of tokens) {
+    try {
+      const tokenContract = new ethers.Contract(token, ERC20_ABI, providers[chain]);
+      const balance = await tokenContract.balanceOf(await flashLiquidators[chain].getAddress());
+      
+      if (balance > 0n) {
+        const symbol = await tokenContract.symbol();
+        const decimals = await tokenContract.decimals();
+        const amount = Number(balance) / (10 ** Number(decimals));
+        
+        console.log(`   💰 Withdrawing ${amount.toFixed(4)} ${symbol} to wallet...`);
+        
+        const tx = await flashLiquidators[chain].withdrawProfit(token, { gasLimit: 100000 });
+        await tx.wait();
+        
+        console.log(`   ✅ Withdrawn ${amount.toFixed(4)} ${symbol}`);
+        await sendDiscord(`💰 PROFIT WITHDRAWN!\n${chain}: ${amount.toFixed(4)} ${symbol}\nSent to your wallet`, true);
+      }
+    } catch (e) {
+      console.log(`   ⚠️ Withdraw error: ${e.message.slice(0, 50)}`);
+    }
+  }
+  
+  // Also withdraw any ETH
+  try {
+    const ethBalance = await providers[chain].getBalance(await flashLiquidators[chain].getAddress());
+    if (ethBalance > ethers.parseEther('0.001')) {
+      console.log(`   💰 Withdrawing ${ethers.formatEther(ethBalance)} ETH...`);
+      const tx = await flashLiquidators[chain].withdrawETH({ gasLimit: 50000 });
+      await tx.wait();
+      console.log(`   ✅ Withdrawn ETH`);
+    }
+  } catch {}
 }
 
 // ============================================================
@@ -283,7 +339,6 @@ async function executeLiquidation(pos) {
 
   try {
     if (protocol === 'aave') {
-      // 🎯 SMART DETECTION: Find actual collateral and debt assets
       console.log(`   🔍 Detecting collateral/debt assets...`);
       const { collateral, debt: debtAsset } = await detectCollateralAndDebt(chain, user);
       
@@ -295,7 +350,6 @@ async function executeLiquidation(pos) {
       console.log(`   📦 Collateral: ${collateral.symbol} (${collateral.asset.slice(0,10)}...)`);
       console.log(`   💸 Debt: ${debtAsset.symbol} (${debtAsset.asset.slice(0,10)}...)`);
       
-      // Calculate debt to cover (50% max for Aave)
       const debtAmount = Number(debtAsset.balance) / (10 ** debtAsset.decimals);
       const debtToCover = ethers.parseUnits(String(Math.floor(debtAmount * 0.5)), debtAsset.decimals);
       
@@ -305,13 +359,6 @@ async function executeLiquidation(pos) {
         console.log(`   ⚠️ No flash liquidator on ${chain}`);
         await sendDiscord(`⚠️ SKIPPED: No flash liquidator on ${chain}`, false);
         return { success: false, reason: 'no_flash_liquidator' };
-      }
-      
-      // Check if collateral and debt are the same (e.g., weETH collateral, WETH debt)
-      // This is a special case - might need different handling
-      const isEthPair = (collateral.symbol.includes('ETH') && debtAsset.symbol.includes('ETH'));
-      if (isEthPair) {
-        console.log(`   ⚠️ ETH-pair position (${collateral.symbol}/${debtAsset.symbol}) - swap may be tricky`);
       }
       
       console.log(`   ⚡ Executing flash loan liquidation...`);
@@ -333,8 +380,13 @@ async function executeLiquidation(pos) {
         stats.liquidations++;
         const profit = debt * 0.05;
         stats.earnings += profit;
-        console.log(`   ✅ SUCCESS! Profit: ~$${profit.toFixed(2)}`);
+        console.log(`   ✅ SUCCESS! Estimated profit: ~$${profit.toFixed(2)}`);
         await sendDiscord(`✅ LIQUIDATION SUCCESS!\n${chain} | ${collateral.symbol}/${debtAsset.symbol}\nDebt: $${debt.toFixed(0)}\nProfit: ~$${profit.toFixed(2)}\nTX: ${tx.hash}`, true);
+        
+        // 💰 AUTO-WITHDRAW PROFITS
+        console.log(`   💰 Auto-withdrawing profits to wallet...`);
+        await withdrawProfits(chain);
+        
         return { success: true, profit, hash: tx.hash };
       } else {
         console.log(`   ❌ Transaction reverted`);
@@ -409,7 +461,6 @@ async function processResults(results) {
   const critical = results.filter(pos => !pos.liquidatable && pos.hf < 1.01 && pos.hf > 0 && pos.debt > 1000);
   const close = results.filter(pos => !pos.liquidatable && pos.hf >= 1.01 && pos.hf < 1.02 && pos.debt > 500);
 
-  // 🔥 PARALLEL LIQUIDATION
   if (liquidatable.length > 0) {
     console.log(`\n🔥🔥🔥 ${liquidatable.length} LIQUIDATABLE - EXECUTING IN PARALLEL 🔥🔥🔥`);
     await sendDiscord(`🔥 ${liquidatable.length} POSITIONS LIQUIDATABLE!`, true);
@@ -418,14 +469,11 @@ async function processResults(results) {
     console.log(`   Result: ${successful}/${liquidatable.length} successful`);
   }
 
-  // 🚨 CRITICAL (< 1% from liquidation)
   for (const pos of critical) {
     const distance = ((pos.hf - 1) * 100).toFixed(2);
     console.log(`   🚨 CRITICAL: ${pos.chain} ${pos.user.slice(0, 10)}... | $${pos.debt.toFixed(0)} | HF: ${pos.hf.toFixed(4)} | ${distance}% away`);
-    await sendDiscord(`🚨 CRITICAL POSITION!\n${pos.chain} | $${pos.debt.toFixed(0)}\nHF: ${pos.hf.toFixed(4)} | ${distance}% from liquidation`, true);
   }
 
-  // 🔥 CLOSE (1-2% from liquidation)
   for (const pos of close) {
     console.log(`   🔥 CLOSE: ${pos.chain} ${pos.user.slice(0, 10)}... | $${pos.debt.toFixed(0)} | HF: ${pos.hf.toFixed(4)}`);
   }
@@ -485,7 +533,7 @@ async function sendStartupMessage() {
     `📊 ${totalPositions} positions\n` +
     `⛓️ ${Object.keys(providers).join(', ')}\n` +
     `⚡ Flash loans: ${Object.keys(flashLiquidators).join(', ') || 'None'}\n` +
-    `🎯 Smart collateral detection ENABLED`, 
+    `💰 Auto-withdraw: ENABLED`, 
     true
   );
 }
