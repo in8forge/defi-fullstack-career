@@ -1,0 +1,11 @@
+// ADD THESE TO eventLiquidatorV3.js
+
+// New Protocol Pools
+const SEAMLESS_POOL = { base: '0x8F44Fd754285aa6A2b8B9B97739B79746e0475a7' };
+const RADIANT_POOL = { arbitrum: '0xF4B1486DD74D07706052A33d31d7c0AAFD0659E1' };
+const BENQI_COMPTROLLER = { avalanche: '0x486Af39519B4Dc9a7fCcd318217352830E8AD9b4' };
+
+// Load new borrower files in loadBorrowers():
+// seamless_borrowers.json
+// radiant_borrowers.json  
+// benqi_borrowers.json
