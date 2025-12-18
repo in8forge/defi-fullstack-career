@@ -1,89 +1,116 @@
-# 🚀 DeFi Liquidation Bot - Production System
+# DeFi Liquidation Infrastructure
 
-> **24/7 automated liquidation infrastructure running on VPS**
+A production-grade liquidation system for decentralized lending protocols, featuring real-time monitoring, MEV protection, and automated execution across multiple EVM chains.
 
-[![Status](https://img.shields.io/badge/Status-LIVE-brightgreen)]()
-[![Protocols](https://img.shields.io/badge/Protocols-4-purple)]()
-[![Chains](https://img.shields.io/badge/Chains-4-blue)]()
+## Overview
 
----
+This project implements a comprehensive liquidation bot infrastructure capable of monitoring thousands of borrowing positions across major DeFi lending protocols. The system identifies undercollateralized positions and executes profitable liquidations using flash loans, requiring zero upfront capital.
 
-## ⚡ Live System
+## Key Features
 
-**Event-Based Liquidator V3** - Multi-protocol bot with parallel execution
+- **Multi-Protocol Support** - Aave V3, Compound V3, and extensible architecture for additional protocols
+- **Multi-Chain Deployment** - Base, Polygon, Arbitrum, Avalanche with chain-specific optimizations
+- **Flash Loan Integration** - Capital-efficient liquidations using Aave V3 flash loans
+- **MEV Protection** - Flashbots integration for private transaction submission
+- **Smart Routing** - Multi-DEX aggregation (Uniswap V3, Sushiswap) with automatic path optimization
+- **Profit Simulation** - Pre-execution profitability analysis to avoid unprofitable transactions
+- **Real-Time Monitoring** - WebSocket-based price feeds with sub-second reaction times
 
-| Feature | Implementation |
-|---------|----------------|
-| Protocols | Aave V3, Compound V3, Morpho Blue, Radiant V2 |
-| Chains | Base, Polygon, Arbitrum, Avalanche |
-| Detection | WebSocket oracle subscriptions (<10ms) |
-| Batching | Multicall (100+ positions per RPC call) |
-| Execution | Parallel + Priority gas (5x) |
-| Uptime | 24/7 VPS (New Jersey) |
-
----
-
-## 🏗️ Architecture
+## Architecture
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                 EVENT LIQUIDATOR V3                              │
-├─────────────────────────────────────────────────────────────────┤
-│  Chainlink WebSocket → Multicall Check → Parallel Execution     │
-├─────────────────────────────────────────────────────────────────┤
-│  PROTOCOLS: Aave V3 │ Compound V3 │ Morpho Blue │ Radiant V2    │
-├─────────────────────────────────────────────────────────────────┤
-│  CHAINS: Base │ Polygon │ Arbitrum │ Avalanche                  │
-└─────────────────────────────────────────────────────────────────┘
-```
-
----
-
-## 📁 Structure
-```
-├── scripts/
-│   ├── eventLiquidatorV3.js      # Main bot (parallel execution)
-│   ├── discoverAllBorrowers.js   # Position discovery
-│   ├── orderKeeper.js            # GMX/Gains keeper
-│   └── flashbotsExecutor.js      # MEV-protected execution
-├── contracts/
-│   ├── FlashLoanExecutor.sol     # Aave V3 flash loans
-│   └── FlashLiquidator.sol       # Liquidation executor
-└── data/
-    ├── borrowers.json            # Aave positions
-    └── compound_borrowers.json   # Compound positions
+├── Monitoring Layer
+│   ├── Chainlink WebSocket price feeds
+│   ├── Multicall3 batch position queries
+│   └── Configurable health factor thresholds
+│
+├── Analysis Layer
+│   ├── Dynamic collateral/debt detection
+│   ├── Profitability simulation
+│   └── Gas cost estimation
+│
+├── Execution Layer
+│   ├── Flash loan orchestration
+│   ├── Multi-DEX swap routing
+│   └── MEV-protected transaction submission
+│
+└── Settlement Layer
+    ├── Automated profit withdrawal
+    └── Event logging and notifications
 ```
 
----
+## Technical Stack
 
-## 💡 Technical Stack
+- **Runtime**: Node.js with ethers.js v6
+- **Smart Contracts**: Solidity 0.8.20+
+- **Infrastructure**: PM2 process management, VPS deployment
+- **Protocols**: Aave V3, Compound V3, Uniswap V3, Sushiswap
+- **MEV Protection**: Flashbots Protect RPC
 
-**Execution**
-- Parallel liquidation (multiple positions simultaneously)
-- Priority gas escalation (5x-20x)
-- Multicall3 batching
+## Smart Contracts
 
-**Detection**
-- WebSocket price feed subscriptions
-- <10ms reaction to oracle updates
-- Background scan fallback (30s)
+Custom flash liquidator contracts deployed across supported chains with features including:
 
-**Infrastructure**
-- VPS deployment (low latency)
-- PM2 process management
-- Auto-restart on reboot
-- Weekly borrower discovery cron
+- Uniswap V3 swap integration with multiple fee tier support
+- Multi-hop routing through WETH for exotic pairs
+- Configurable slippage protection
+- ETH derivative handling (weETH, wstETH, cbETH)
+- Owner-controlled profit withdrawal
 
----
+## Development Roadmap
 
-## 🗓️ Development
+### Phase 1: Foundation ✅
+- Core liquidation logic
+- Flash loan integration
+- Multi-protocol monitoring
 
-| Week | Focus | Status |
-|------|-------|--------|
-| 1-2 | Environment, ERC20, Wallets | ✅ |
-| 3-4 | Flash loans, Uniswap, Fork testing | ✅ |
-| 5 | Multi-protocol bots, VPS deployment | ✅ |
-| 6+ | Scaling, Additional protocols | 📋 |
+### Phase 2: Production ✅
+- VPS deployment
+- MEV protection
+- Profit simulation
+- Auto-withdrawal
 
----
+### Phase 3: Optimization (Current)
+- DEX aggregator integration
+- Gas optimization
+- Performance monitoring
 
-*Production DeFi infrastructure* 🔥
+### Phase 4: Scale
+- Additional protocols
+- Cross-chain strategies
+- Advanced MEV techniques
+
+## Performance Metrics
+
+| Metric | Value |
+|--------|-------|
+| Positions Monitored | 3,000+ |
+| Supported Chains | 4 |
+| Reaction Time | <100ms |
+| Minimum Profit Threshold | Configurable |
+
+## Usage
+```bash
+# Install dependencies
+npm install
+
+# Configure environment
+cp .env.example .env
+
+# Run locally
+node scripts/eventLiquidatorV5.js
+
+# Deploy contracts
+node scripts/deployFlashLiquidatorV2.js <chain>
+```
+
+## Configuration
+
+The system requires RPC endpoints and WebSocket URLs for each supported chain. See `.env.example` for required environment variables.
+
+## Disclaimer
+
+This software is provided for educational and research purposes. DeFi liquidation involves financial risk. Users are responsible for understanding the protocols and risks involved.
+
+## License
+
+MIT
