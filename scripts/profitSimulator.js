@@ -1,96 +1,76 @@
-import 'dotenv/config';
-import { ethers } from 'ethers';
+import { getParaswapQuote } from './paraswapQuoter.js';
 
-// Simulates liquidation profit before execution
-export class ProfitSimulator {
-  constructor(provider, chainConfig) {
-    this.provider = provider;
-    this.config = chainConfig;
-  }
-
-  async simulateLiquidation(params) {
-    const { collateralAsset, debtAsset, user, debtToCover, collateralPrice, debtPrice } = params;
-    
-    // Get liquidation bonus from Aave (typically 5-10%)
-    const liquidationBonus = await this.getLiquidationBonus(collateralAsset);
-    
-    // Calculate expected collateral received
-    const debtValueUsd = (Number(debtToCover) / 1e18) * debtPrice;
-    const collateralReceivedUsd = debtValueUsd * (1 + liquidationBonus / 10000);
-    const collateralAmount = collateralReceivedUsd / collateralPrice;
-    
-    // Estimate swap output (with slippage)
-    const swapOutput = await this.estimateSwapOutput(
-      collateralAsset,
-      debtAsset,
-      collateralAmount
-    );
-    
-    // Calculate costs
-    const flashLoanFee = debtValueUsd * 0.0009; // 0.09% Aave fee
-    const gasEstimate = await this.estimateGas(params);
-    const gasCostUsd = gasEstimate * this.config.gasPrice * this.config.nativeTokenPrice;
-    
-    // Calculate profit
-    const grossProfit = swapOutput - Number(debtToCover) / 1e18;
-    const grossProfitUsd = grossProfit * debtPrice;
-    const netProfitUsd = grossProfitUsd - flashLoanFee - gasCostUsd;
-    
-    return {
-      profitable: netProfitUsd > 0,
-      netProfitUsd,
-      grossProfitUsd,
-      flashLoanFee,
-      gasCostUsd,
-      gasEstimate,
-      collateralReceivedUsd,
-      swapOutput,
-      liquidationBonus,
-      breakdown: {
-        debtToCoverUsd: debtValueUsd,
-        collateralReceivedUsd,
-        swapOutputUsd: swapOutput * debtPrice,
-        flashLoanFee,
-        gasCostUsd,
-        netProfitUsd,
+export async function simulateProfit(chain, pos, collateral, debt, chainConfig) {
+  const debtDecimals = debt.decimals || 18;
+  const collateralDecimals = collateral.decimals || 18;
+  
+  // Calculate debt to cover (50% of position)
+  const debtAmountRaw = Number(debt.balance) / (10 ** debtDecimals);
+  const debtToCover = debtAmountRaw * 0.5;
+  
+  // Get liquidation bonus (typically 5%)
+  const liquidationBonus = 0.05;
+  const collateralReceived = debtToCover * (1 + liquidationBonus);
+  const collateralReceivedWei = BigInt(Math.floor(collateralReceived * (10 ** collateralDecimals)));
+  
+  // Get swap quote from Paraswap
+  let swapOutput;
+  let swapSource = 'estimate';
+  
+  if (collateral.asset && debt.asset && collateral.asset !== debt.asset) {
+    try {
+      const quote = await getParaswapQuote(
+        chain,
+        collateral.asset,
+        debt.asset,
+        collateralReceivedWei.toString(),
+        collateralDecimals
+      );
+      
+      if (quote?.destAmount) {
+        swapOutput = Number(quote.destAmount) / (10 ** debtDecimals);
+        swapSource = 'paraswap';
+        console.log(`   📊 Paraswap quote: ${swapOutput.toFixed(4)} ${debt.symbol} ($${quote.destUSD || 'N/A'})`);
       }
-    };
+    } catch (e) {
+      // Fallback to estimate
+    }
   }
-
-  async getLiquidationBonus(collateralAsset) {
-    // Typical Aave liquidation bonuses
-    const bonuses = {
-      'WETH': 500,   // 5%
-      'USDC': 450,   // 4.5%
-      'USDT': 450,
-      'WBTC': 500,
-      'weETH': 500,
-      'wstETH': 500,
-      'cbETH': 500,
-      'default': 500,
-    };
-    
-    // In production, fetch from Aave getReserveData()
-    return bonuses.default;
+  
+  // Fallback: estimate with 0.5% slippage
+  if (!swapOutput) {
+    const slippage = 0.005;
+    swapOutput = collateralReceived * (1 - slippage);
+    swapSource = 'estimate';
   }
-
-  async estimateSwapOutput(tokenIn, tokenOut, amountIn) {
-    // Simulate swap quote
-    // In production, call Uniswap quoter or 1inch API
-    
-    // For now, assume 0.5% slippage
-    const slippage = 0.995;
-    return amountIn * slippage;
-  }
-
-  async estimateGas(params) {
-    // Typical gas for flash loan liquidation
-    // Flash loan: ~100k
-    // Liquidation: ~300k
-    // Swap: ~150k
-    // Total: ~550k
-    return 550000;
-  }
+  
+  // Calculate costs
+  const flashLoanFee = debtToCover * 0.0009; // 0.09%
+  
+  // Gas estimation
+  const gasUnits = 550000;
+  const gasPrice = chainConfig?.gasPrice || 1;
+  const nativePrice = chainConfig?.nativePrice || 2900;
+  const gasCostNative = gasUnits * gasPrice / 1e9;
+  const gasCostUsd = gasCostNative * nativePrice;
+  
+  // Calculate profit
+  const grossProfit = swapOutput - debtToCover;
+  const grossProfitUsd = grossProfit * (pos.debt / debtAmountRaw);
+  const netProfitUsd = grossProfitUsd - flashLoanFee - gasCostUsd;
+  
+  return {
+    profitable: netProfitUsd > 5, // $5 minimum
+    netProfitUsd,
+    grossProfitUsd,
+    flashLoanFee,
+    gasCostUsd,
+    debtToCover,
+    collateralReceived,
+    swapOutput,
+    swapSource,
+    liquidationBonus: liquidationBonus * 10000,
+  };
 }
 
-export default ProfitSimulator;
+export default { simulateProfit };
