@@ -3,17 +3,17 @@ import { ethers } from 'ethers';
 import http from 'http';
 
 // ============================================================
-// 📊 BOT DASHBOARD - Public Stats Page
+// BOT DASHBOARD - Public Stats Page
 // ============================================================
 
 const PORT = 3000;
 
 const CHAINS = {
-  base: { rpc: process.env.BASE_RPC_URL, explorer: 'https://basescan.org' },
-  polygon: { rpc: process.env.POLYGON_RPC_URL, explorer: 'https://polygonscan.com' },
-  arbitrum: { rpc: process.env.ARBITRUM_RPC_URL, explorer: 'https://arbiscan.io' },
-  avalanche: { rpc: process.env.AVALANCHE_RPC_URL, explorer: 'https://snowtrace.io' },
-  bnb: { rpc: process.env.BNB_RPC_URL || 'https://bsc-dataseed.binance.org', explorer: 'https://bscscan.com' },
+  base: { rpc: process.env.BASE_RPC_URL, explorer: 'https://basescan.org', symbol: 'ETH' },
+  polygon: { rpc: process.env.POLYGON_RPC_URL, explorer: 'https://polygonscan.com', symbol: 'POL' },
+  arbitrum: { rpc: process.env.ARBITRUM_RPC_URL, explorer: 'https://arbiscan.io', symbol: 'ETH' },
+  avalanche: { rpc: process.env.AVALANCHE_RPC_URL, explorer: 'https://snowtrace.io', symbol: 'AVAX' },
+  bnb: { rpc: process.env.BNB_RPC_URL || 'https://bsc-dataseed.binance.org', explorer: 'https://bscscan.com', symbol: 'BNB' },
 };
 
 const WALLET = process.env.PRIVATE_KEY ? 
@@ -39,10 +39,11 @@ async function getBalances() {
       const balance = await provider.getBalance(WALLET);
       balances[chain] = {
         native: Number(ethers.formatEther(balance)).toFixed(4),
+        symbol: config.symbol,
         explorer: `${config.explorer}/address/${WALLET}`,
       };
     } catch {
-      balances[chain] = { native: 'Error', explorer: config.explorer };
+      balances[chain] = { native: 'Error', symbol: config.symbol, explorer: config.explorer };
     }
   }
   
@@ -69,6 +70,7 @@ async function generateHTML() {
 <html>
 <head>
   <title>DeFi Bot Dashboard</title>
+  <meta charset="UTF-8">
   <meta http-equiv="refresh" content="30">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -90,7 +92,7 @@ async function generateHTML() {
     }
     .grid { 
       display: grid; 
-      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); 
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); 
       gap: 20px; 
       margin-bottom: 30px;
     }
@@ -102,7 +104,7 @@ async function generateHTML() {
       backdrop-filter: blur(10px);
     }
     .card h2 { 
-      font-size: 1em; 
+      font-size: 0.9em; 
       color: #888; 
       margin-bottom: 10px;
       text-transform: uppercase;
@@ -117,7 +119,7 @@ async function generateHTML() {
     .card .value.danger { color: #ff4444; }
     .balances-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
       gap: 15px;
     }
     .balance-item {
@@ -127,20 +129,26 @@ async function generateHTML() {
       text-align: center;
     }
     .balance-item .chain { 
-      font-size: 0.9em; 
+      font-size: 0.85em; 
       color: #00d9ff;
       text-transform: uppercase;
       margin-bottom: 5px;
+      font-weight: 600;
     }
     .balance-item .amount { 
-      font-size: 1.5em; 
+      font-size: 1.4em; 
       font-weight: bold; 
+    }
+    .balance-item .symbol {
+      font-size: 0.8em;
+      color: #888;
+      margin-left: 4px;
     }
     .balance-item a {
       display: block;
       margin-top: 8px;
-      color: #888;
-      font-size: 0.8em;
+      color: #666;
+      font-size: 0.75em;
       text-decoration: none;
     }
     .balance-item a:hover { color: #00d9ff; }
@@ -164,31 +172,75 @@ async function generateHTML() {
       list-style: none;
     }
     .bots-list li {
-      padding: 10px 0;
+      padding: 12px 0;
       border-bottom: 1px solid rgba(255,255,255,0.1);
       display: flex;
       justify-content: space-between;
+      align-items: center;
     }
     .bots-list li:last-child { border: none; }
-    .bot-status { color: #00ff88; }
+    .bot-name {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .bot-icon {
+      width: 24px;
+      height: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+    }
+    .bot-status { 
+      color: #00ff88;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.9em;
+    }
+    .bot-status::before {
+      content: '';
+      width: 8px;
+      height: 8px;
+      background: #00ff88;
+      border-radius: 50%;
+    }
     .wallet {
       font-family: monospace;
-      font-size: 0.9em;
-      color: #888;
+      font-size: 0.85em;
+      color: #666;
       word-break: break-all;
-      margin-top: 10px;
+      margin-top: 15px;
+      padding: 10px;
+      background: rgba(0,0,0,0.2);
+      border-radius: 8px;
     }
     footer {
       text-align: center;
-      color: #555;
+      color: #444;
       margin-top: 30px;
-      font-size: 0.9em;
+      font-size: 0.85em;
+    }
+    .protocols {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 15px;
+    }
+    .protocol-tag {
+      background: rgba(0,217,255,0.15);
+      color: #00d9ff;
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-size: 0.75em;
+      font-weight: 500;
     }
   </style>
 </head>
 <body>
   <div class="container">
-    <h1>⚡ DeFi Bot Dashboard</h1>
+    <h1>DeFi Bot Dashboard</h1>
     
     <div class="grid">
       <div class="card">
@@ -219,18 +271,34 @@ async function generateHTML() {
       <h2>Active Bots</h2>
       <ul class="bots-list">
         <li>
-          <span>💀 Liquidation Bot V5</span>
-          <span class="bot-status">● Running</span>
+          <div class="bot-name">
+            <span class="bot-icon">&#x1F480;</span>
+            <span>Liquidation Bot V5</span>
+          </div>
+          <span class="bot-status">Running</span>
         </li>
         <li>
-          <span>🤖 Multi-Protocol Keeper</span>
-          <span class="bot-status">● Running</span>
+          <div class="bot-name">
+            <span class="bot-icon">&#x1F916;</span>
+            <span>Multi-Protocol Keeper</span>
+          </div>
+          <span class="bot-status">Running</span>
         </li>
         <li>
-          <span>🔵 Synthetix Settler</span>
-          <span class="bot-status">● Running</span>
+          <div class="bot-name">
+            <span class="bot-icon">&#x1F535;</span>
+            <span>Synthetix Settler</span>
+          </div>
+          <span class="bot-status">Running</span>
         </li>
       </ul>
+      <div class="protocols">
+        <span class="protocol-tag">Aave V3</span>
+        <span class="protocol-tag">Compound V3</span>
+        <span class="protocol-tag">Synthetix</span>
+        <span class="protocol-tag">GMX</span>
+        <span class="protocol-tag">Gains Network</span>
+      </div>
     </div>
 
     <div class="card">
@@ -239,8 +307,8 @@ async function generateHTML() {
         ${Object.entries(balances).map(([chain, data]) => `
           <div class="balance-item">
             <div class="chain">${chain}</div>
-            <div class="amount">${data.native}</div>
-            <a href="${data.explorer}" target="_blank">View on Explorer →</a>
+            <div class="amount">${data.native}<span class="symbol">${data.symbol}</span></div>
+            <a href="${data.explorer}" target="_blank">View on Explorer</a>
           </div>
         `).join('')}
       </div>
@@ -259,7 +327,7 @@ async function generateHTML() {
 const server = http.createServer(async (req, res) => {
   if (req.url === '/' || req.url === '/dashboard') {
     const html = await generateHTML();
-    res.writeHead(200, { 'Content-Type': 'text/html' });
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
     res.end(html);
   } else if (req.url === '/api/stats') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -271,6 +339,6 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, '0.0.0.0', () => {
-  console.log(`📊 Dashboard running at http://localhost:${PORT}`);
-  console.log(`📊 Public URL: http://104.238.135.135:${PORT}`);
+  console.log(`Dashboard running at http://localhost:${PORT}`);
+  console.log(`Public URL: http://104.238.135.135:${PORT}`);
 });
