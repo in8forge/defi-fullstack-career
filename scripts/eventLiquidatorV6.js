@@ -177,7 +177,7 @@ async function discoverVenusBorrowers() {
     try {
       const vToken = new ethers.Contract(config.address, VENUS_VTOKEN_ABI, venusProvider);
       const filter = vToken.filters.Borrow();
-      const events = await vToken.queryFilter(filter, -5000);
+      const events = await vToken.queryFilter(filter, -50000);
       
       for (const event of events) {
         borrowers.venus.add(event.args.borrower);
