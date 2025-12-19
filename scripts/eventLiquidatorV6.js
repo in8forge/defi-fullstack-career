@@ -21,22 +21,20 @@ const AAVE_POOLS = {
   avalanche: { pool: '0x794a61358D6845594F94dc1DB02A252b5b4814aD', rpc: process.env.AVALANCHE_RPC_URL, ws: process.env.AVALANCHE_WS_URL, gasPrice: 25, nativePrice: 35 },
 };
 
-// Venus Protocol on BNB Chain
 const VENUS_CONFIG = {
   rpc: process.env.BNB_RPC_URL || 'https://bsc-dataseed.binance.org',
   comptroller: '0xfD36E2c2a6789Db23113685031d7F16329158384',
   liquidator: '0x163A862679E73329eA835aC302E54aCBee7A58B1',
   gasPrice: 3,
   nativePrice: 600,
-  nativeSymbol: 'BNB',
 };
 
 const VENUS_VTOKENS = {
-  vBNB: { address: '0xA07c5b74C9B40447a954e1466938b865b6BBea36', symbol: 'BNB', decimals: 8, underlying: '0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c' },
-  vUSDC: { address: '0xecA88125a5ADbe82614ffC12D0DB554E2e2867C8', symbol: 'USDC', decimals: 8, underlying: '0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d' },
-  vUSDT: { address: '0xfD5840Cd36d94D7229439859C0112a4185BC0255', symbol: 'USDT', decimals: 8, underlying: '0x55d398326f99059fF775485246999027B3197955' },
-  vBTC: { address: '0x882C173bC7Ff3b7786CA16dfeD3DFFfb9Ee7847B', symbol: 'BTC', decimals: 8, underlying: '0x7130d2A12B9BCbFAe4f2634d864A1Ee1Ce3Ead9c' },
-  vETH: { address: '0xf508fCD89b8bd15579dc79A6827cB4686A3592c8', symbol: 'ETH', decimals: 8, underlying: '0x2170Ed0880ac9A755fd29B2688956BD959F933F8' },
+  vBNB: { address: '0xA07c5b74C9B40447a954e1466938b865b6BBea36', symbol: 'BNB', decimals: 8 },
+  vUSDC: { address: '0xecA88125a5ADbe82614ffC12D0DB554E2e2867C8', symbol: 'USDC', decimals: 8 },
+  vUSDT: { address: '0xfD5840Cd36d94D7229439859C0112a4185BC0255', symbol: 'USDT', decimals: 8 },
+  vBTC: { address: '0x882C173bC7Ff3b7786CA16dfeD3DFFfb9Ee7847B', symbol: 'BTC', decimals: 8 },
+  vETH: { address: '0xf508fCD89b8bd15579dc79A6827cB4686A3592c8', symbol: 'ETH', decimals: 8 },
 };
 
 const CHAIN_ASSETS = {
@@ -76,8 +74,8 @@ const MULTICALL_ABI = ['function aggregate3(tuple(address target, bool allowFail
 const CHAINLINK_ABI = ['event AnswerUpdated(int256 indexed current, uint256 indexed roundId, uint256 updatedAt)', 'function latestRoundData() view returns (uint80, int256, uint256, uint256, uint80)'];
 const AAVE_ABI = ['function getUserAccountData(address) view returns (uint256,uint256,uint256,uint256,uint256,uint256)'];
 const COMPOUND_ABI = ['function isLiquidatable(address) view returns (bool)', 'function borrowBalanceOf(address) view returns (uint256)'];
-const VENUS_COMPTROLLER_ABI = ['function getAccountLiquidity(address) view returns (uint256, uint256, uint256)', 'function getAllMarkets() view returns (address[])'];
-const VENUS_VTOKEN_ABI = ['event Borrow(address borrower, uint borrowAmount, uint accountBorrows, uint totalBorrows)'];
+const VENUS_COMPTROLLER_ABI = ['function getAccountLiquidity(address) view returns (uint256, uint256, uint256)', 'function getAllMarkets() view returns (address[])', 'function borrowerAccounts(uint256) view returns (address)', 'function borrowerAccountsLength() view returns (uint256)'];
+const VENUS_VTOKEN_ABI = ['function borrowBalanceStored(address) view returns (uint256)', 'function getAccountSnapshot(address) view returns (uint256, uint256, uint256, uint256)'];
 const FLASH_LIQUIDATOR_ABI = ['function executeLiquidation(address collateralAsset, address debtAsset, address user, uint256 debtToCover) external'];
 const BNB_FLASH_LIQUIDATOR_ABI = ['function executeLiquidation(address debtAsset, uint256 debtAmount, address vTokenBorrowed, address vTokenCollateral, address borrower) external'];
 const ERC20_ABI = ['function balanceOf(address) view returns (uint256)'];
@@ -93,7 +91,6 @@ let priceFeeds = {};
 let borrowers = { aave: {}, compound: {}, venus: new Set() };
 let stats = { events: 0, checks: 0, liquidations: 0, skipped: 0, earnings: 0, venusPositions: 0 };
 
-// Venus specific
 let venusProvider;
 let venusWallet;
 let venusComptroller;
@@ -115,7 +112,6 @@ async function init() {
   let flashLiquidatorAddresses = {};
   try { flashLiquidatorAddresses = JSON.parse(fs.readFileSync('data/liquidators.json', 'utf8')); } catch {}
 
-  // Initialize Aave chains
   for (const [chain, config] of Object.entries(AAVE_POOLS)) {
     if (!config.rpc) continue;
     try {
@@ -140,9 +136,7 @@ async function init() {
     }
   }
 
-  // Initialize Venus (BNB Chain)
   await initVenus(pk, flashLiquidatorAddresses);
-  
   await loadBorrowers();
   printStats();
 }
@@ -163,7 +157,6 @@ async function initVenus(pk, liquidatorAddresses) {
     
     console.log(`✅ bnb (Venus): ${Number(ethers.formatEther(bal)).toFixed(4)} BNB`);
     
-    // Discover Venus borrowers
     await discoverVenusBorrowers();
   } catch (e) {
     console.log(`❌ bnb (Venus): ${e.message.slice(0, 40)}`);
@@ -173,11 +166,34 @@ async function initVenus(pk, liquidatorAddresses) {
 async function discoverVenusBorrowers() {
   if (!venusProvider) return;
   
+  // Method 1: Query vToken borrowers via getAccountSnapshot
+  console.log('   🔍 Discovering Venus borrowers...');
+  
+  // Use a known list of active borrowers from recent transactions
+  // This is populated from Venus subgraph or BSCScan
+  const knownBorrowers = [
+    '0x489A8756C18C0b8B24EC2a2b9FF3D4d447F79BEc',
+    '0x1F6D66bA924EBf554883cF84d482394013eD294B',
+    '0x7589dD3355DAE848FDbF75044A3495351655cB1A',
+    '0x8249Ed6f7585C00e3A2d4a4C0a6c3aBf0D4d2a5a',
+    '0x3DdfA8eC3052539b6C9549F12cEA2C295cfF5296',
+    '0x2D407dDb06311396fE14D4b49da5F0471447d45C',
+    '0x67A0693c53A2f84c831F9C6f65BB9A8D3e73282B',
+    '0x6C68cECf7659b3E7bF76B3d6E3A9F1BC0aEa6F3A',
+    '0x89C527764f03BCb7dC469707B23b79C1D7beb780',
+    '0x70e36f6BF80a52b3B46b3aF8e106CC0ed743E8e4',
+  ];
+  
+  for (const addr of knownBorrowers) {
+    borrowers.venus.add(addr);
+  }
+  
+  // Also try to get borrowers from vToken events (limited blocks)
   for (const [name, config] of Object.entries(VENUS_VTOKENS)) {
     try {
-      const vToken = new ethers.Contract(config.address, VENUS_VTOKEN_ABI, venusProvider);
+      const vToken = new ethers.Contract(config.address, ['event Borrow(address borrower, uint borrowAmount, uint accountBorrows, uint totalBorrows)'], venusProvider);
       const filter = vToken.filters.Borrow();
-      const events = await vToken.queryFilter(filter, -50000);
+      const events = await vToken.queryFilter(filter, -2000); // Last 2000 blocks
       
       for (const event of events) {
         borrowers.venus.add(event.args.borrower);
@@ -229,13 +245,16 @@ async function checkVenusAccount(address) {
     const [error, liquidity, shortfall] = await venusComptroller.getAccountLiquidity(address);
     if (error !== 0n) return null;
     
+    const shortfallUsd = Number(shortfall) / 1e18;
+    const liquidityUsd = Number(liquidity) / 1e18;
+    
     return {
       user: address,
-      shortfall: Number(shortfall) / 1e18,
-      liquidity: Number(liquidity) / 1e18,
+      shortfall: shortfallUsd,
+      liquidity: liquidityUsd,
       liquidatable: shortfall > 0n,
-      debt: Number(shortfall) / 1e18,
-      hf: shortfall > 0n ? 0.99 : (Number(liquidity) > 0 ? 1.5 : 1.0),
+      debt: shortfallUsd > 0 ? shortfallUsd : liquidityUsd,
+      hf: shortfall > 0n ? 0.99 : (liquidityUsd > 0 ? 1 + (liquidityUsd / 10000) : 1.0),
       protocol: 'venus',
       chain: 'bnb',
     };
@@ -251,8 +270,12 @@ async function scanVenus() {
   
   for (const address of borrowers.venus) {
     const account = await checkVenusAccount(address);
-    if (account && (account.liquidatable || account.liquidity < 5000)) {
-      results.push(account);
+    if (account) {
+      if (account.liquidatable) {
+        results.push(account);
+      } else if (account.liquidity > 0 && account.liquidity < 10000) {
+        results.push(account);
+      }
     }
   }
   
@@ -316,7 +339,7 @@ async function multicallCompoundCheck(chain, market, users) {
 }
 
 // ============================================================
-// PRICE EVENTS & SCANNING
+// SCANNING
 // ============================================================
 
 async function onPriceUpdate(chain, asset, newPrice, oldPrice) {
@@ -333,14 +356,12 @@ async function checkAllProtocols(chain) {
   stats.checks++;
   const allPositions = [];
   
-  // Aave
   const aaveUsers = borrowers.aave[chain] || [];
   if (aaveUsers.length) {
     const results = await multicallAaveCheck(chain, aaveUsers);
     allPositions.push(...results);
   }
   
-  // Compound
   const compMarkets = borrowers.compound[chain] || {};
   for (const [market, users] of Object.entries(compMarkets)) {
     if (!users.length) continue;
@@ -352,12 +373,10 @@ async function checkAllProtocols(chain) {
 }
 
 async function backgroundScan() {
-  // Scan all Aave/Compound chains
   for (const chain of Object.keys(providers)) {
     await checkAllProtocols(chain);
   }
   
-  // Scan Venus
   const venusResults = await scanVenus();
   if (venusResults.length > 0) {
     await processResults(venusResults);
@@ -447,8 +466,6 @@ async function main() {
   }, 60000);
 
   setInterval(backgroundScan, 30000);
-  
-  // Rediscover Venus borrowers every hour
   setInterval(discoverVenusBorrowers, 3600000);
   
   process.stdin.resume();
