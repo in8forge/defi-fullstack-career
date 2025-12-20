@@ -4,7 +4,7 @@ import http from 'http';
 import fs from 'fs';
 
 // ============================================================
-// BOT DASHBOARD V3 - Liquidator V7.4.1 Status
+// BOT DASHBOARD V3 - Liquidator V7.5 Status
 // ============================================================
 
 const PORT = 3000;
@@ -35,13 +35,13 @@ let stats = {
   positionsMonitored: 0,
   criticalPositions: [],
   lastCheck: Date.now(),
-  version: 'V7.4.1',
+  version: 'V7.5',
 };
 
 // Try to read stats from liquidator log
 function updateStatsFromLog() {
   try {
-    const logPath = '/home/botuser/.pm2/logs/liquidator-v741-out.log';
+    const logPath = '/home/botuser/.pm2/logs/liquidator-v75-out.log';
     const log = fs.readFileSync(logPath, 'utf8');
     const lines = log.split('\n').slice(-200);
     
@@ -417,7 +417,7 @@ async function generateHTML() {
     <h2 class="section-title">Active Bots</h2>
     <div class="bots-list">
       <div class="bot-item">
-        <span class="bot-name">Liquidator V7.4.1</span>
+        <span class="bot-name">Liquidator V7.5</span>
         <span class="bot-status"><span class="status-dot"></span> Running</span>
       </div>
       <div class="bot-item">
@@ -459,9 +459,10 @@ const server = http.createServer(async (req, res) => {
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`
 ╔══════════════════════════════════════════════════════════════════════╗
-║  Dashboard V3 - Liquidator V7.4.1 Status                             ║
+║  Dashboard V3 - Liquidator V7.5 Status                               ║
 ║  http://localhost:${PORT}                                                ║
 ║  http://104.238.135.135:${PORT}                                          ║
 ╚══════════════════════════════════════════════════════════════════════╝
 `);
 });
+
