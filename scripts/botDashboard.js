@@ -1,171 +1,438 @@
 import 'dotenv/config';
 import { ethers } from 'ethers';
 import http from 'http';
+import fs from 'fs';
+
+// ============================================================
+// BOT DASHBOARD V3 - Liquidator V7.4.1 Status
+// ============================================================
 
 const PORT = 3000;
 
 const CHAINS = {
-  base: { rpc: process.env.BASE_RPC_URL, native: 'ETH', explorer: 'https://basescan.org' },
-  polygon: { rpc: process.env.POLYGON_RPC_URL, native: 'MATIC', explorer: 'https://polygonscan.com' },
-  arbitrum: { rpc: process.env.ARBITRUM_RPC_URL, native: 'ETH', explorer: 'https://arbiscan.io' },
-  avalanche: { rpc: process.env.AVALANCHE_RPC_URL, native: 'AVAX', explorer: 'https://snowtrace.io' },
-  bnb: { rpc: process.env.BNB_RPC_URL || 'https://bsc-dataseed.binance.org', native: 'BNB', explorer: 'https://bscscan.com' },
+  base: { rpc: process.env.BASE_RPC_URL, explorer: 'https://basescan.org', symbol: 'ETH', color: '#0052FF' },
+  polygon: { rpc: process.env.POLYGON_RPC_URL, explorer: 'https://polygonscan.com', symbol: 'POL', color: '#8247E5' },
+  arbitrum: { rpc: process.env.ARBITRUM_RPC_URL, explorer: 'https://arbiscan.io', symbol: 'ETH', color: '#28A0F0' },
+  avalanche: { rpc: process.env.AVALANCHE_RPC_URL, explorer: 'https://snowtrace.io', symbol: 'AVAX', color: '#E84142' },
+  bnb: { rpc: process.env.BNB_RPC_URL || 'https://bsc-dataseed.binance.org', explorer: 'https://bscscan.com', symbol: 'BNB', color: '#F0B90B' },
 };
 
-const LIQUIDATORS = {
-  base: '0xDB3F939A10F098FaF5766aCF856fEda287c2ce22',
-  polygon: '0x163A862679E73329eA835aC302E54aCBee7A58B1',
-  arbitrum: '0x163A862679E73329eA835aC302E54aCBee7A58B1',
-  avalanche: '0x163A862679E73329eA835aC302E54aCBee7A58B1',
-  bnb: '0x163A862679E73329eA835aC302E54aCBee7A58B1',
+const WALLET = process.env.PRIVATE_KEY ? 
+  new ethers.Wallet(process.env.PRIVATE_KEY).address : 
+  '0x55F5F2186f907057EB40a9EFEa99A0A41BcbB885';
+
+// Load liquidator addresses
+let liquidatorAddresses = {};
+try { liquidatorAddresses = JSON.parse(fs.readFileSync('data/liquidators.json', 'utf8')); } catch {}
+
+// Stats tracking
+let stats = {
+  startTime: Date.now(),
+  liquidations: 0,
+  attempted: 0,
+  failed: 0,
+  totalEarned: 0,
+  positionsMonitored: 0,
+  criticalPositions: [],
+  lastCheck: Date.now(),
+  version: 'V7.4.1',
 };
 
-async function getChainData(chain, config) {
+// Try to read stats from liquidator log
+function updateStatsFromLog() {
   try {
-    const provider = new ethers.JsonRpcProvider(config.rpc);
-    const wallet = new ethers.Wallet(process.env.PRIVATE_KEY, provider);
-    const balance = await provider.getBalance(wallet.address);
-    const block = await provider.getBlockNumber();
+    const logPath = '/home/botuser/.pm2/logs/liquidator-v741-out.log';
+    const log = fs.readFileSync(logPath, 'utf8');
+    const lines = log.split('\n').slice(-200);
     
-    let contractStatus = '❌ Not deployed';
-    if (LIQUIDATORS[chain]) {
-      const code = await provider.getCode(LIQUIDATORS[chain]);
-      contractStatus = code.length > 10 ? '✅ Ready' : '❌ Not deployed';
+    // Parse latest stats
+    for (const line of lines.reverse()) {
+      if (line.includes('Checks:')) {
+        const match = line.match(/Attempted: (\d+).*Success: (\d+).*Failed: (\d+)/);
+        if (match) {
+          stats.attempted = parseInt(match[1]);
+          stats.liquidations = parseInt(match[2]);
+          stats.failed = parseInt(match[3]);
+          break;
+        }
+      }
     }
     
-    return {
-      chain,
-      balance: Number(ethers.formatEther(balance)).toFixed(4),
-      native: config.native,
-      block,
-      contract: LIQUIDATORS[chain] || 'N/A',
-      contractStatus,
-      explorer: config.explorer,
-    };
-  } catch (e) {
-    return { chain, error: e.message.slice(0, 30) };
-  }
+    // Parse critical positions
+    stats.criticalPositions = [];
+    for (const line of lines) {
+      if (line.includes('CRITICAL:')) {
+        const match = line.match(/CRITICAL: (\w+) (\w+) (0x[a-fA-F0-9]+).*\$([0-9,]+).*HF: ([0-9.]+)/);
+        if (match) {
+          const existing = stats.criticalPositions.find(p => p.user === match[3]);
+          if (!existing) {
+            stats.criticalPositions.push({
+              chain: match[1],
+              protocol: match[2],
+              user: match[3],
+              debt: match[4].replace(',', ''),
+              hf: match[5],
+            });
+          }
+        }
+      }
+    }
+    stats.criticalPositions = stats.criticalPositions.slice(0, 10);
+    
+    // Parse positions count
+    for (const line of lines) {
+      if (line.includes('POSITIONS:')) {
+        const match = line.match(/POSITIONS: (\d+) Aave \+ (\d+) Compound \+ (\d+) Venus/);
+        if (match) {
+          stats.positionsMonitored = parseInt(match[1]) + parseInt(match[2]) + parseInt(match[3]);
+          break;
+        }
+      }
+    }
+    
+    stats.lastCheck = Date.now();
+  } catch {}
 }
 
-async function generateDashboard() {
-  const timestamp = new Date().toISOString();
-  const chainData = await Promise.all(
-    Object.entries(CHAINS).map(([chain, config]) => getChainData(chain, config))
-  );
+async function getBalances() {
+  const balances = {};
+  
+  for (const [chain, config] of Object.entries(CHAINS)) {
+    if (!config.rpc) continue;
+    try {
+      const provider = new ethers.JsonRpcProvider(config.rpc);
+      const balance = await provider.getBalance(WALLET);
+      const block = await provider.getBlockNumber();
+      balances[chain] = {
+        native: Number(ethers.formatEther(balance)).toFixed(4),
+        symbol: config.symbol,
+        explorer: config.explorer,
+        color: config.color,
+        block,
+        liquidator: liquidatorAddresses[chain] || liquidatorAddresses.compound?.[chain] || null,
+      };
+    } catch (e) {
+      balances[chain] = { 
+        native: 'Error', 
+        symbol: config.symbol, 
+        explorer: config.explorer,
+        color: config.color,
+        error: e.message.slice(0, 30),
+      };
+    }
+  }
+  
+  return balances;
+}
 
+function formatUptime(ms) {
+  const seconds = Math.floor(ms / 1000);
+  const minutes = Math.floor(seconds / 60);
+  const hours = Math.floor(minutes / 60);
+  const days = Math.floor(hours / 24);
+  
+  if (days > 0) return `${days}d ${hours % 24}h ${minutes % 60}m`;
+  if (hours > 0) return `${hours}h ${minutes % 60}m`;
+  return `${minutes}m ${seconds % 60}s`;
+}
+
+function formatNumber(num) {
+  if (num >= 1000000) return `$${(num / 1000000).toFixed(2)}M`;
+  if (num >= 1000) return `$${(num / 1000).toFixed(0)}K`;
+  return `$${num}`;
+}
+
+async function generateHTML() {
+  updateStatsFromLog();
+  const balances = await getBalances();
+  const uptime = formatUptime(Date.now() - stats.startTime);
+  
   return `<!DOCTYPE html>
 <html>
 <head>
-  <title>🤖 DeFi Bot Dashboard</title>
+  <title>Liquidator Dashboard V7.4.1</title>
+  <meta charset="UTF-8">
   <meta http-equiv="refresh" content="30">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: 'Segoe UI', system-ui, sans-serif; background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); color: #eee; min-height: 100vh; padding: 20px; }
+    body { 
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #0f0f23 0%, #1a1a2e 50%, #16213e 100%);
+      color: #e6e6e6;
+      min-height: 100vh;
+      padding: 20px;
+    }
     .container { max-width: 1400px; margin: 0 auto; }
-    h1 { text-align: center; margin-bottom: 10px; font-size: 2.5em; }
-    .subtitle { text-align: center; color: #888; margin-bottom: 30px; }
-    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; margin-bottom: 30px; }
-    .card { background: rgba(255,255,255,0.05); border-radius: 15px; padding: 20px; border: 1px solid rgba(255,255,255,0.1); }
-    .card h3 { color: #4ecdc4; margin-bottom: 15px; display: flex; align-items: center; gap: 10px; }
-    .chain-icon { width: 24px; height: 24px; border-radius: 50%; background: #4ecdc4; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; }
-    .stat { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
-    .stat:last-child { border: none; }
-    .stat-label { color: #888; }
-    .stat-value { font-weight: 600; }
-    .status-card { grid-column: span 2; }
-    .bot-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; }
-    .bot { background: rgba(0,0,0,0.2); padding: 15px; border-radius: 10px; }
-    .bot-name { font-weight: 600; margin-bottom: 5px; }
-    .bot-status { font-size: 0.9em; }
-    .online { color: #4ecdc4; }
-    .critical { background: rgba(255,107,107,0.2); border: 1px solid #ff6b6b; }
-    .critical h3 { color: #ff6b6b; }
-    .protocols { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
-    .protocol-badge { background: rgba(78,205,196,0.2); color: #4ecdc4; padding: 4px 12px; border-radius: 20px; font-size: 0.85em; }
-    a { color: #4ecdc4; text-decoration: none; }
-    a:hover { text-decoration: underline; }
-    .footer { text-align: center; color: #666; margin-top: 30px; font-size: 0.9em; }
+    
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 30px;
+      padding-bottom: 20px;
+      border-bottom: 1px solid #333;
+    }
+    h1 { 
+      font-size: 28px;
+      background: linear-gradient(90deg, #00d4ff, #7b2cbf);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .version {
+      background: #7b2cbf;
+      padding: 6px 14px;
+      border-radius: 20px;
+      font-size: 14px;
+      font-weight: 600;
+    }
+    
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 20px;
+      margin-bottom: 30px;
+    }
+    .stat-card {
+      background: rgba(255,255,255,0.05);
+      border-radius: 16px;
+      padding: 24px;
+      border: 1px solid rgba(255,255,255,0.1);
+    }
+    .stat-label { 
+      font-size: 13px; 
+      color: #888; 
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 8px;
+    }
+    .stat-value { 
+      font-size: 32px; 
+      font-weight: 700;
+    }
+    .stat-value.success { color: #00ff88; }
+    .stat-value.warning { color: #ffaa00; }
+    .stat-value.danger { color: #ff4466; }
+    .stat-value.info { color: #00d4ff; }
+    
+    .section-title {
+      font-size: 20px;
+      margin: 30px 0 20px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    
+    .chains-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 16px;
+      margin-bottom: 30px;
+    }
+    .chain-card {
+      background: rgba(255,255,255,0.05);
+      border-radius: 12px;
+      padding: 20px;
+      border-left: 4px solid var(--chain-color);
+    }
+    .chain-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+    .chain-name {
+      font-size: 18px;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+    .chain-balance {
+      font-size: 24px;
+      font-weight: 700;
+      color: #00ff88;
+    }
+    .chain-symbol {
+      font-size: 14px;
+      color: #888;
+      margin-left: 4px;
+    }
+    .chain-info {
+      font-size: 13px;
+      color: #666;
+      margin-top: 12px;
+    }
+    .chain-info a {
+      color: #00d4ff;
+      text-decoration: none;
+    }
+    
+    .critical-table {
+      width: 100%;
+      background: rgba(255,255,255,0.05);
+      border-radius: 12px;
+      overflow: hidden;
+      margin-bottom: 30px;
+    }
+    .critical-table th {
+      background: rgba(255,68,102,0.2);
+      padding: 14px 16px;
+      text-align: left;
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: #ff4466;
+    }
+    .critical-table td {
+      padding: 14px 16px;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+    }
+    .critical-table tr:last-child td { border-bottom: none; }
+    .hf-critical { 
+      color: #ff4466;
+      font-weight: 700;
+    }
+    .hf-warning {
+      color: #ffaa00;
+      font-weight: 700;
+    }
+    
+    .bots-list {
+      background: rgba(255,255,255,0.05);
+      border-radius: 12px;
+      padding: 20px;
+    }
+    .bot-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+    }
+    .bot-item:last-child { border-bottom: none; }
+    .bot-name { font-weight: 500; }
+    .bot-status {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: #00ff88;
+    }
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      background: #00ff88;
+      border-radius: 50%;
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+    
+    footer {
+      text-align: center;
+      padding: 30px;
+      color: #666;
+      font-size: 13px;
+    }
+    
+    .empty-state {
+      text-align: center;
+      padding: 40px;
+      color: #666;
+    }
   </style>
 </head>
 <body>
   <div class="container">
-    <h1>🤖 DeFi Liquidation Bot</h1>
-    <p class="subtitle">Event Liquidator V6.1 - Bad Debt Filter Enabled</p>
+    <header>
+      <h1>Liquidator Dashboard</h1>
+      <span class="version">${stats.version}</span>
+    </header>
     
-    <div class="grid">
-      <div class="card status-card">
-        <h3>📊 Bot Status</h3>
-        <div class="bot-grid">
-          <div class="bot">
-            <div class="bot-name">⚡ event-liq-v6</div>
-            <div class="bot-status online">● Online</div>
-            <div class="protocols">
-              <span class="protocol-badge">Aave V3</span>
-              <span class="protocol-badge">Compound V3</span>
-              <span class="protocol-badge">Venus</span>
-            </div>
-          </div>
-          <div class="bot">
-            <div class="bot-name">🔧 multi-keeper</div>
-            <div class="bot-status online">● Online</div>
-            <div class="protocols">
-              <span class="protocol-badge">GMX</span>
-              <span class="protocol-badge">Gains</span>
-            </div>
-          </div>
-          <div class="bot">
-            <div class="bot-name">💹 snx-settler</div>
-            <div class="bot-status online">● Online</div>
-            <div class="protocols">
-              <span class="protocol-badge">Synthetix</span>
-            </div>
-          </div>
-          <div class="bot">
-            <div class="bot-name">📈 dashboard</div>
-            <div class="bot-status online">● Online</div>
-            <div class="protocols">
-              <span class="protocol-badge">Monitoring</span>
-            </div>
-          </div>
-        </div>
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-label">Uptime</div>
+        <div class="stat-value info">${uptime}</div>
       </div>
-      
-      <div class="card critical">
-        <h3>🔥 Critical Positions</h3>
-        <div class="stat"><span class="stat-label">Base Aave Whale</span><span class="stat-value">$1.26M @ HF 1.006</span></div>
-        <div class="stat"><span class="stat-label">Avalanche Aave</span><span class="stat-value">$593K @ HF 1.010</span></div>
-        <div class="stat"><span class="stat-label">Bad Debt Filtered</span><span class="stat-value">Venus $57K ✓</span></div>
-        <div class="stat"><span class="stat-label">Total Monitored</span><span class="stat-value">3,121 positions</span></div>
+      <div class="stat-card">
+        <div class="stat-label">Positions Monitored</div>
+        <div class="stat-value">${stats.positionsMonitored.toLocaleString()}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Liquidations</div>
+        <div class="stat-value success">${stats.liquidations}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Attempted</div>
+        <div class="stat-value warning">${stats.attempted}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Failed</div>
+        <div class="stat-value danger">${stats.failed}</div>
       </div>
     </div>
     
-    <div class="grid">
-      ${chainData.map(d => d.error ? `
-        <div class="card">
-          <h3><span class="chain-icon">❌</span> ${d.chain}</h3>
-          <div class="stat"><span class="stat-label">Error</span><span class="stat-value">${d.error}</span></div>
-        </div>
-      ` : `
-        <div class="card">
-          <h3><span class="chain-icon">⛓</span> ${d.chain.toUpperCase()}</h3>
-          <div class="stat"><span class="stat-label">Balance</span><span class="stat-value">${d.balance} ${d.native}</span></div>
-          <div class="stat"><span class="stat-label">Block</span><span class="stat-value">#${d.block.toLocaleString()}</span></div>
-          <div class="stat"><span class="stat-label">Liquidator</span><span class="stat-value">${d.contractStatus}</span></div>
-          <div class="stat"><span class="stat-label">Contract</span><span class="stat-value"><a href="${d.explorer}/address/${d.contract}" target="_blank">${d.contract.slice(0,8)}...</a></span></div>
+    <h2 class="section-title">Critical Positions (HF &lt; 1.02)</h2>
+    ${stats.criticalPositions.length > 0 ? `
+    <table class="critical-table">
+      <thead>
+        <tr>
+          <th>Chain</th>
+          <th>Protocol</th>
+          <th>User</th>
+          <th>Debt</th>
+          <th>Health Factor</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${stats.criticalPositions.map(p => `
+          <tr>
+            <td>${p.chain.toUpperCase()}</td>
+            <td>${p.protocol.toUpperCase()}</td>
+            <td><a href="${CHAINS[p.chain]?.explorer || '#'}/address/${p.user}" target="_blank" style="color: #00d4ff">${p.user.slice(0, 10)}...</a></td>
+            <td>${formatNumber(parseFloat(p.debt))}</td>
+            <td class="${parseFloat(p.hf) < 1.01 ? 'hf-critical' : 'hf-warning'}">${p.hf}</td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+    ` : '<div class="empty-state">No critical positions currently</div>'}
+    
+    <h2 class="section-title">Chain Balances</h2>
+    <div class="chains-grid">
+      ${Object.entries(balances).map(([chain, data]) => `
+        <div class="chain-card" style="--chain-color: ${data.color}">
+          <div class="chain-header">
+            <span class="chain-name">${chain}</span>
+          </div>
+          <div class="chain-balance">
+            ${data.native}<span class="chain-symbol">${data.symbol}</span>
+          </div>
+          ${data.block ? `<div class="chain-info">Block #${data.block.toLocaleString()}</div>` : ''}
+          ${data.liquidator ? `<div class="chain-info">Liquidator: <a href="${data.explorer}/address/${data.liquidator}" target="_blank">${data.liquidator.slice(0,10)}...</a></div>` : ''}
         </div>
       `).join('')}
     </div>
     
-    <div class="card">
-      <h3>📋 System Info</h3>
-      <div class="stat"><span class="stat-label">Version</span><span class="stat-value">V6.1 - Bad Debt Filter</span></div>
-      <div class="stat"><span class="stat-label">Chains</span><span class="stat-value">Base, Polygon, Arbitrum, Avalanche, BNB</span></div>
-      <div class="stat"><span class="stat-label">Protocols</span><span class="stat-value">Aave V3, Compound V3, Venus</span></div>
-      <div class="stat"><span class="stat-label">Features</span><span class="stat-value">Flash Loans, MEV Protection, Bad Debt Filter</span></div>
-      <div class="stat"><span class="stat-label">Last Update</span><span class="stat-value">${timestamp}</span></div>
+    <h2 class="section-title">Active Bots</h2>
+    <div class="bots-list">
+      <div class="bot-item">
+        <span class="bot-name">Liquidator V7.4.1</span>
+        <span class="bot-status"><span class="status-dot"></span> Running</span>
+      </div>
+      <div class="bot-item">
+        <span class="bot-name">Multi-Protocol Keeper</span>
+        <span class="bot-status"><span class="status-dot"></span> Running</span>
+      </div>
+      <div class="bot-item">
+        <span class="bot-name">Synthetix Settler</span>
+        <span class="bot-status"><span class="status-dot"></span> Running</span>
+      </div>
     </div>
     
-    <p class="footer">Auto-refreshes every 30 seconds | Week 5 DeFi Engineering</p>
+    <footer>
+      Last updated: ${new Date().toLocaleString()} | Auto-refresh: 30s | Week 5 DeFi Engineering
+    </footer>
   </div>
 </body>
 </html>`;
@@ -173,9 +440,13 @@ async function generateDashboard() {
 
 const server = http.createServer(async (req, res) => {
   if (req.url === '/' || req.url === '/dashboard') {
-    const html = await generateDashboard();
-    res.writeHead(200, { 'Content-Type': 'text/html' });
+    const html = await generateHTML();
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
     res.end(html);
+  } else if (req.url === '/api/stats') {
+    updateStatsFromLog();
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify(stats));
   } else if (req.url === '/health') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ status: 'ok', timestamp: new Date().toISOString() }));
@@ -185,11 +456,12 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-server.listen(PORT, () => {
+server.listen(PORT, '0.0.0.0', () => {
   console.log(`
 ╔══════════════════════════════════════════════════════════════════════╗
-║  📊 BOT DASHBOARD V2                                                 ║
-║  🌐 http://localhost:${PORT}                                            ║
+║  Dashboard V3 - Liquidator V7.4.1 Status                             ║
+║  http://localhost:${PORT}                                                ║
+║  http://104.238.135.135:${PORT}                                          ║
 ╚══════════════════════════════════════════════════════════════════════╝
 `);
 });
