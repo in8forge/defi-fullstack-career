@@ -1,4 +1,4 @@
-cat > scripts/eventLiquidatorV7.1.js << 'EOF'
+
 import 'dotenv/config';
 import { ethers } from 'ethers';
 import fs from 'fs';
@@ -823,4 +823,3 @@ async function main() {
 }
 
 main().catch(console.error);
-EOF
