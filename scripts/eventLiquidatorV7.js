@@ -487,3 +487,12 @@ async function main() {
 }
 
 main().catch(console.error);
+
+// Add to end of executeAaveLiquidation after success:
+// await withdrawProfits(chain);
+
+// Add weekly discovery
+setInterval(async () => {
+  console.log('🔍 Running weekly borrower discovery...');
+  // Run discoverAllBorrowers.js logic
+}, 7 * 24 * 60 * 60 * 1000);
