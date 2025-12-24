@@ -1,36 +1,27 @@
 # DeFi Full-Stack Infrastructure
+## Multi-Chain Liquidation, Monitoring, and Execution System
 
-**Multi-Chain Liquidation, Monitoring, and Execution System**
+**Versions: V7.5 (JS) → V25 (Rust)**
 
-**Version: v7.5 (Production Hardened)**
-
-This repository contains a complete multi-chain, multi-protocol liquidation and monitoring system, built to operate in real-time across Aave V3, Compound V3, and Venus, with price oracle streaming, MEV protection, and Flash Loan execution.
-
-It demonstrates end-to-end DeFi engineering capabilities including:
-
-- Solidity smart contracts
-- Flash loan liquidation design
-- Cross-chain monitoring architecture
-- MEV-aware execution
-- Price oracle integration
-- Backend infrastructure
-- Production reliability engineering
-
-This is the same class of system used by professional liquidators, MEV searchers, risk engines, and protocol automation teams.
+A production-grade multi-chain liquidation and monitoring system operating across Aave V3, Compound V3, and Venus, with real-time price streaming, MEV protection, flash-loan execution, and cross-chain automation.
 
 ---
 
-## Overview
+## System Overview
 
-The system continuously monitors 3,000+ borrower positions across five chains, simulating profit, detecting liquidations, and executing via flash loans when profitable.
+Monitors **542,000+ borrower positions** across **7 chains** and executes profitable liquidations via flash loans and MEV-protected transactions.
 
 ### Supported Chains
 
-- Base
-- Polygon
-- Arbitrum
-- Avalanche
-- BNB Chain
+| Chain | Status | Borrowers |
+|-------|--------|-----------|
+| Ethereum Mainnet | ✅ Live | Discovering |
+| Base | ✅ Live | 197,507 |
+| Optimism | ✅ Live | Discovering |
+| Arbitrum | ✅ Live | 177,764 |
+| Polygon | ✅ Live | 103,576 |
+| Avalanche | ✅ Live | 63,266 |
+| BNB Chain | ✅ Live | Discovering |
 
 ### Supported Protocols
 
@@ -38,239 +29,195 @@ The system continuously monitors 3,000+ borrower positions across five chains, s
 - Compound V3
 - Venus
 
-### Execution Layer
-
-- Flash loan liquidators deployed on all supported networks
-- Flashbots MEV bundle submission
-- Auto-withdraw to owner
-- Competitor detection
-- Gas optimisation & nonce tracking
-
-### Monitoring Layer
-
-- Chainlink WebSocket price feeds
-- Multicall3 batched HF/position checks
-- Bad debt detection
-- Borrower discovery (Aave, Compound, Venus)
-- Discord alerting
-
----
-
-## Core Components
-
-### 1. Liquidation Smart Contracts
-
-Located in `contracts/`:
-
-- `FlashLiquidator.sol` (multi-chain)
-- `BNBFlashLiquidator.sol` (Venus integration)
-
-Supports:
-- Flash loans
-- Collateral swaps
-- Repay logic
-- Profit extraction
-- Exec safety checks
-
-Contracts are deployed on all chains and addresses are stored in:
-```
-data/liquidators.json
-```
-
-### 2. EventLiquidator V7.5
-
-Main execution engine: `scripts/eventLiquidatorV7_5.js`
-
-Features:
-- Monitors Aave, Compound, Venus across chains
-- Real-time price streaming (Chainlink WS)
-- Health factor calculation
-- Liquidatable position detection
-- Profit simulation
-- Execution with MEV protection
-- Competitor detection
-- Auto-withdraw profits to owner
-- Bad debt auto-tracking
-- Discord notifications
-- Graceful shutdown + restart
-
-### 3. Utilities & Tooling
-
-- `deploy-*.js`: automated contract deployments
-- `scripts/` includes:
-  - protocol checkers
-  - borrower scanners
-  - liquidation simulators
-  - swap helpers
-  - execution utilities
-
 ---
 
 ## Architecture
 ```
-┌────────────────────────────────────────────────────────────────────┐
-│                         ORACLE LAYER                               │
-│   Chainlink WS Feeds → ETH/USD, BTC/USD, AVAX/USD, MATIC/USD       │
-└────────────────────────────────────────────────────────────────────┘
-┌────────────────────────────────────────────────────────────────────┐
-│                    MONITORING LAYER (V7.5)                         │
-│   • Aave V3 (4 chains) → 2,238 positions                           │
-│   • Compound V3 (3 chains) → 880 positions                         │
-│   • Venus (BNB) → 10 positions                                     │
-│   • Multicall3 batching                                            │
-│   • Price cache + HF cache                                         │
-│   • Discord Alerts                                                 │
-└────────────────────────────────────────────────────────────────────┘
-┌────────────────────────────────────────────────────────────────────┐
-│                     EXECUTION LAYER                                │
-│   • Flash Loan Liquidators (5 chains)                              │
-│   • Flashbots MEV protection                                       │
-│   • Competitor detection                                           │
-│   • Profit simulation                                              │
-│   • Auto-withdraw profits                                          │
-└────────────────────────────────────────────────────────────────────┘
-┌────────────────────────────────────────────────────────────────────┐
-│                    OBSERVABILITY & OPS                             │
-│   • /health endpoint                                               │
-│   • /debug endpoint                                                │
-│   • Circuit breaker                                                │
-│   • Graceful shutdown                                              │
-│   • Debug logs → data/debug.json                                   │
-└────────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│                      ORACLE LAYER                                │
+│  Chainlink WS Feeds → Price Cache → Cross-Validation            │
+└─────────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────────┐
+│                    MONITORING LAYER                              │
+│  542k+ Positions │ Multicall3 Batching │ HF Simulation          │
+│  Borrower Discovery │ Bad Debt Detection │ Discord Alerts       │
+└─────────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────────┐
+│                    EXECUTION LAYER                               │
+│  Flash Loans │ Flashbots MEV │ Multi-DEX Routing                │
+│  Priority Queue │ Profit Simulation │ Competitor Detection      │
+└─────────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────────┐
+│                    TREASURY LAYER                                │
+│  Auto-Withdraw (30 min) │ Multi-Token │ Threshold Sweeps        │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## v7.5 Release Notes (Production Hardened)
+## V25 (Rust) - Current Production
 
-This release brings major reliability upgrades:
+High-performance Rust engine with 7-chain support.
 
-### Critical Fixes
-- Environment variable validation
-- Execution lock timeouts
-- Nonce management overhaul
-- Circuit breaker (auto-pause after repeated failures)
-- Event handler crash protection
+### Performance vs JS
 
-### High Priority Fixes
-- Price cache reduced from 60s → 10s
-- Protocol bonus validation
-- Competitor detection before execution
+| Metric | V7.5 (JS) | V25 (Rust) |
+|--------|-----------|------------|
+| Execution Speed | 1x | ~10x |
+| Memory Usage | ~150MB | ~35MB |
+| RPC Failover | ❌ | ✅ 2-3/chain |
+| Multicall Batching | ❌ | ✅ 100/call |
+| Priority Queue | ❌ | ✅ Profit-sorted |
+| DEX Routing | Uniswap only | 1inch+Paraswap+Uni |
 
-### Medium Priority Fixes
-- Empty catch blocks replaced with structured logs
-- Memory leak fixed in opportunity log
-- Graceful shutdown and interval tracking
+### Features
 
-### New Features
-- `/health` endpoint
-- `/debug` endpoint
-- Dry run mode (`DRY_RUN=true`)
-- Competitor liquidation tracking
-- Circuit breaker status reporting
+| Feature | Description |
+|---------|-------------|
+| Multi-RPC Failover | 2-3 providers per chain with health checks |
+| Multicall3 | Batch 100 positions per RPC call |
+| MEV Protection | Flashbots bundle submission |
+| DEX Routing | 1inch → Paraswap → Uniswap fallback |
+| Priority Queue | Profit-first liquidation ordering |
+| Auto-Withdraw | Sweep profits every 30 minutes |
+| Circuit Breaker | Auto-pause on consecutive failures |
 
----
+### Contract Deployments
 
-## Deployment Summary
-
-### Smart Contracts (per chain)
-
-| Chain | Contract | Address |
-|-------|----------|---------|
-| Base | FlashLiquidator | `0xDB3F939A10F098FaF5766aCF856fEda287c2ce22` |
-| Polygon | FlashLiquidator | `0x163A862679E73329eA835aC302E54aCBee7A58B1` |
-| Arbitrum | FlashLiquidator | `0x163A862679E73329eA835aC302E54aCBee7A58B1` |
-| Avalanche | FlashLiquidator | `0x163A862679E73329eA835aC302E54aCBee7A58B1` |
-| BNB Chain | BNBFlashLiquidator | `0x163A862679E73329eA835aC302E54aCBee7A58B1` |
+| Chain | Address |
+|-------|---------|
+| Ethereum | `0x163A862679E73329eA835aC302E54aCBee7A58B1` |
+| Base | `0x163A862679E73329eA835aC302E54aCBee7A58B1` |
+| Optimism | `0x163A862679E73329eA835aC302E54aCBee7A58B1` |
+| Arbitrum | `0x163A862679E73329eA835aC302E54aCBee7A58B1` |
+| Polygon | `0x163A862679E73329eA835aC302E54aCBee7A58B1` |
+| Avalanche | `0x163A862679E73329eA835aC302E54aCBee7A58B1` |
+| BNB Chain | `0x163A862679E73329eA835aC302E54aCBee7A58B1` |
 
 ---
 
-## Running the Monitoring System
+## Quick Start
 
-Requires Node 22+ and a funded wallet with gas on monitored chains.
+### Rust V25
 ```bash
-npm install
-npm run monitor
+cd liquidator-rs
+cp .env.example .env  # Configure your keys
+cargo build --release
+./target/release/liquidator
 ```
 
-Environment variables:
-```
-PRIVATE_KEY=...
-ALCHEMY_KEY=...
-DISCORD_WEBHOOK=...
+### Environment Variables
+```env
+PRIVATE_KEY=0x...
+DISCORD_WEBHOOK=https://discord.com/api/webhooks/...
 DRY_RUN=false
-```
 
-Health check:
-```bash
-curl http://localhost:3847/health
-curl http://localhost:3847/debug
+# RPCs (comma-separated for failover)
+ETHEREUM_RPC_URL=https://eth-mainnet.g.alchemy.com/v2/KEY
+BASE_RPC_URL=https://base-mainnet.g.alchemy.com/v2/KEY
+OPTIMISM_RPC_URL=https://opt-mainnet.g.alchemy.com/v2/KEY
+ARBITRUM_RPC_URL=https://arb-mainnet.g.alchemy.com/v2/KEY
+POLYGON_RPC_URL=https://polygon-mainnet.g.alchemy.com/v2/KEY
+AVALANCHE_RPC_URL=https://avax-mainnet.g.alchemy.com/v2/KEY
+BNB_RPC_URL=https://bsc-dataseed.binance.org
+
+# Liquidator Contracts
+ETHEREUM_LIQUIDATOR=0x163A862679E73329eA835aC302E54aCBee7A58B1
+BASE_LIQUIDATOR=0x163A862679E73329eA835aC302E54aCBee7A58B1
+# ... etc for each chain
 ```
 
 ---
 
-## VPS Infrastructure
+## Production Infrastructure
 
-The system is actively running on a production VPS:
+### Services
 
-| Component | Status | Purpose |
-|-----------|--------|---------|
-| liquidator-v75 | Online | Multi-protocol liquidation monitor |
-| multi-keeper | Online | GMX / Gains / SNX automation |
-| snx-settler | Online | Synthetix perpetual order settlement |
-| dashboard | Online | Monitoring dashboard |
+| Component | Manager | Purpose |
+|-----------|---------|---------|
+| liquidator-rust | systemd | Rust 7-chain liquidator |
+| botDashboard | PM2 | Web monitoring dashboard |
+| multi-keeper | PM2 | GMX/Gains/SNX automation |
+| snx-settler | PM2 | Synthetix settlement |
+
+### Commands
+```bash
+# Rust bot
+systemctl status liquidator-rust
+systemctl restart liquidator-rust
+journalctl -u liquidator-rust -f
+
+# Dashboard  
+pm2 logs botDashboard
+
+# Health
+curl http://localhost:3847/health
+```
+
+### Dashboard
+
+Live monitoring showing:
+- Bot status & uptime
+- 7 chain balances
+- RPC health per chain
+- Liquidation statistics
+- Critical positions (HF < 1)
+- Circuit breaker status
+
+---
+
+## Project Structure
+```
+├── liquidator-rs/          # Rust V25 engine
+│   ├── src/
+│   │   ├── main.rs         # Entry point
+│   │   ├── chains.rs       # Multi-RPC management
+│   │   ├── scanner.rs      # Position monitoring
+│   │   ├── executor.rs     # Liquidation + auto-withdraw
+│   │   ├── oracle.rs       # Chainlink WS feeds
+│   │   ├── swap.rs         # Multi-DEX routing
+│   │   └── protocols/      # Aave, Compound, Venus
+│   └── Cargo.toml
+├── contracts/              # Solidity contracts
+│   ├── FlashLiquidatorV2.sol
+│   └── BNBFlashLiquidator.sol
+├── scripts/                # JS utilities & legacy
+└── data/                   # Borrower cache
+```
 
 ---
 
 ## Technical Skills Demonstrated
 
-This repo demonstrates expertise across:
-
-### Smart Contracts
-- Flash loans
-- Liquidation logic
-- Collateral swap routing
-- MEV mitigation
-
-### Backend & Infrastructure
-- Multi-chain RPC management
-- WebSocket oracles
-- Multicall batching
-- Rate limiting
-- Nonce management
-- Circuit breaker design
-
-### DeFi Protocol Knowledge
-- Aave V3 liquidation engine
-- Compound V3 base-collateral model
-- Venus liquidation logic
-- Swap routers (Uni/Pancake)
-- Price oracle manipulation safety
-
-### Production Engineering
-- Process crash resistance
-- Graceful shutdown
-- Observability endpoints
-- Real-time alerting
-- Configurable execution engine
+- **Smart Contracts**: Flash loans, liquidation logic, multi-DEX swaps, MEV mitigation
+- **Rust**: High-performance async systems, error handling, type safety
+- **DeFi Protocols**: Aave V3, Compound V3, Venus, Uniswap, Chainlink
+- **Infrastructure**: Multi-chain coordination, RPC failover, systemd services
+- **Production Ops**: Circuit breakers, health monitoring, 24/7 uptime
 
 ---
 
-## Contact & Hiring
+## Changelog
 
-This repository represents a complete, production-scale DeFi engineering codebase, demonstrating both:
+### 2024-12-24 - V25 Expansion
+- Added Ethereum mainnet support
+- Added Optimism support  
+- Deployed FlashLiquidatorV2 to Ethereum
+- 7 chains now active
+- 542k+ borrowers monitored
 
-- Smart contract expertise
-- Backend execution engine design
-- Multi-chain liquidation knowledge
+### 2024-12-23 - V25 Release
+- Migrated from JS to Rust engine
+- Added auto-withdraw profits
+- Deployed to VPS with systemd
+- ~10x performance improvement
 
-I am available for:
-- Smart contract development
-- Risk / liquidation systems
-- MEV/keeper infrastructure
-- Protocol automation
-- DeFi backend engineering
+---
 
-**Email:** insightforge@tuta.io
+## Contact
 
-**GitHub:** [github.com/in8forge](https://github.com/in8forge)
+- Email: insightforge@tuta.io
+- GitHub: [github.com/in8forge](https://github.com/in8forge)
