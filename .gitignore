@@ -20,3 +20,10 @@ typechain-types/
 
 # Logs
 *.log
+.env
+.env.*
+node_modules/
+artifacts/
+cache/
+data/borrowers.json
+*.log
